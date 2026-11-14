@@ -36,7 +36,8 @@
     "fix": "vp fmt && cargo clippy --fix --all-targets --allow-dirty --allow-staged && vp check --fix",
     "prepublishOnly": "npm run build",
     "prepare": "node --import @oxc-node/core/register scripts/setup.ts",
-    "repo:sanity": "node --import @oxc-node/core/register scripts/repo-sanity.ts"
+    "repo:sanity": "node --import @oxc-node/core/register scripts/repo-sanity.ts",
+    "ci": "node --import @oxc-node/core/register scripts/ci.ts"
   },
   "devDependencies": {
     "@emnapi/core": "^1.11.3",

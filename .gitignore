@@ -9,3 +9,8 @@ target/
 dist/
 
 .vitest/
+
+# CI outputs (scripts/ci.ts, scripts/publish.ts)
+artifacts/
+npm/
+.publish/
