@@ -164,7 +164,8 @@ if (invoked) {
     process.exit(0);
   }
   const port = await app.start();
-  console.log(`listening on http://${app.host}:${port}`);
+  const host = app.host.includes(":") ? `[${app.host}]` : app.host;
+  console.log(`listening on http://${host}:${port}`);
   const shutdown = async (signal: string) => {
     console.log(`received ${signal}, stopping`);
     await app.stop();

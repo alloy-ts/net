@@ -23,6 +23,11 @@ function parseHost(raw) {
   return host;
 }
 
+function listenUrl(host, port) {
+  const authority = host.includes(":") ? `[${host}]` : host;
+  return `http://${authority}:${port}`;
+}
+
 const port = parsePort(process.env.PORT);
 const host = parseHost(process.env.HOST);
 
@@ -35,7 +40,7 @@ app.get("/health", (c) => c.text("ok"));
 app.get("/ping", (c) => c.text("pong"));
 
 const bound = await app.start();
-console.log(`listening on http://${app.host}:${bound}`);
+console.log(`listening on ${listenUrl(app.host, bound)}`);
 
 let stopping = false;
 async function shutdown(signal) {
