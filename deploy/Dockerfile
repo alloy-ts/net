@@ -27,8 +27,14 @@ COPY package.json package-lock.json ./
 # setup.ts is for a git checkout, not an image build
 RUN npm ci --ignore-scripts
 
+COPY Cargo.toml Cargo.lock build.rs ./
+COPY vendor ./vendor
+
 COPY . .
-RUN node --import @oxc-node/core/register build.ts --release && npx vp pack
+RUN --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/root/.cargo/git \
+    --mount=type=cache,target=/src/target \
+    node --import @oxc-node/core/register build.ts --release && npx vp pack
 
 FROM node:24-bookworm-slim AS runtime
 
