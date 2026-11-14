@@ -103,4 +103,7 @@ function main(): void {
   console.log("[setup] repository setup complete");
 }
 
-main();
+export { parseManifestConfig };
+
+// Run only when executed directly (the prepare hook), not when imported.
+if (process.argv[1] === fileURLToPath(import.meta.url)) main();
