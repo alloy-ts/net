@@ -100,6 +100,15 @@ function main(): void {
     git(["config", "--local", key, value]);
   }
 
+  // Check the result against the manifest once at setup. Report only, so a
+  // fresh clone still installs; the pre-commit hook enforces it.
+  console.log("[setup] scripts/repo-sanity.ts --report");
+  execFileSync(
+    process.execPath,
+    ["--import", "@oxc-node/core/register", join(root, "scripts", "repo-sanity.ts"), "--report"],
+    { cwd: root, stdio: "inherit" },
+  );
+
   console.log("[setup] repository setup complete");
 }
 
