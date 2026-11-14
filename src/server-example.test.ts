@@ -12,6 +12,7 @@ test("examples/server.ts exercises the public server API in process", async () =
   } finally {
     console.log = original;
   }
+  expect(lines.join("\n")).toContain("GET /health 200 ok");
   expect(lines.join("\n")).toContain("GET /ping 200 pong 1");
   expect(lines.join("\n")).toContain("QUERY /search 200 found");
 });

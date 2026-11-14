@@ -1,8 +1,9 @@
 /**
  * Hono-style server from alloy-ts/repository#153 @16ca02d.
  *
- * Listen (PORT defaults to 3000):
+ * Listen (PORT defaults to 3000, HOST defaults to 127.0.0.1):
  *   node --import @oxc-node/core/register examples/server.ts
+ *   HOST=0.0.0.0 PORT=3000 node --import @oxc-node/core/register examples/server.ts
  *
  * In-process checks, no listener:
  *   EXAMPLE_SMOKE=1 node --import @oxc-node/core/register examples/server.ts
@@ -14,12 +15,16 @@ import assert from "node:assert/strict";
 import { pathToFileURL } from "node:url";
 import { RegExpRouter, Server } from "../src/main.ts";
 
-export function createApp(port = Number(process.env.PORT ?? 3000)) {
+export function createApp(
+  port = Number(process.env["PORT"] ?? 3000),
+  host = process.env["HOST"] ?? "127.0.0.1",
+) {
   const app = new Server({
     router: new RegExpRouter(),
     port,
-    host: "127.0.0.1",
+    host,
   });
+  app.get("/health", (c) => c.text("ok"));
 
   // Global middleware. The header is set after the handler has responded.
   app.use(async (c, next) => {
@@ -75,6 +80,12 @@ export function createApp(port = Number(process.env.PORT ?? 3000)) {
 /** Calls the routes above without opening a socket. */
 export async function demonstrate(app: Server): Promise<void> {
   const env = { TOKEN: "secret" };
+  const health = await app.request("/health");
+  const healthBody = await health.text();
+  console.log("GET /health", health.status, healthBody);
+  assert.equal(health.status, 200);
+  assert.equal(healthBody, "ok");
+
   const ping = await app.request("/ping");
   console.log("GET /ping", ping.status, await ping.text(), ping.headers.get("x-after"));
   assert.equal(ping.status, 200);
@@ -154,4 +165,15 @@ if (invoked) {
   }
   const port = await app.start();
   console.log(`listening on http://${app.host}:${port}`);
+  const shutdown = async (signal: string) => {
+    console.log(`received ${signal}, stopping`);
+    await app.stop();
+    process.exit(0);
+  };
+  process.on("SIGTERM", () => {
+    void shutdown("SIGTERM");
+  });
+  process.on("SIGINT", () => {
+    void shutdown("SIGINT");
+  });
 }
