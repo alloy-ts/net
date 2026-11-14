@@ -18,7 +18,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
 COPY . .
-RUN npm run build
+RUN node --import @oxc-node/core/register build.ts --release && npx vp pack
 
 FROM node:24-bookworm-slim AS runtime
 
