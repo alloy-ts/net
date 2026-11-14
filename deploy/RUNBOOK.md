@@ -22,7 +22,7 @@ From the repository root:
 
 ```sh
 cp -n .env.example .env
-docker compose -f deploy/compose.yml build
+docker compose -f deploy/compose.yml --env-file .env build
 ```
 
 Or build the image directly:
@@ -34,15 +34,18 @@ docker build -f deploy/Dockerfile -t alloy-ts-net:local .
 ## Run
 
 ```sh
-docker compose -f deploy/compose.yml up --build -d
-docker compose -f deploy/compose.yml ps
+docker compose -f deploy/compose.yml --env-file .env up --build -d
+docker compose -f deploy/compose.yml --env-file .env ps
 curl -sS "http://127.0.0.1:${PORT:-3000}/health"
 curl -sS "http://127.0.0.1:${PORT:-3000}/ping"
 ```
 
 `HOST` inside the container must stay `0.0.0.0` so the published port can
-reach the process. Change `PORT` in `.env` if 3000 is already taken; the
-compose mapping uses the same value on the host and in the container.
+reach the process. Change `PORT` in `.env` if 3000 is already taken; pass
+`--env-file .env` from the repository root so the compose port mapping and
+the container see the same value. A service `environment:` block would
+override `env_file`, so `HOST` and `PORT` are not set there. Image `ENV`
+defaults apply when `.env` omits them.
 
 The service uses `restart: unless-stopped`. A crash or a `docker kill`
 starts a new container; `docker compose stop` or `down` does not.
@@ -51,8 +54,8 @@ starts a new container; `docker compose stop` or `down` does not.
 
 ```sh
 git pull
-docker compose -f deploy/compose.yml build
-docker compose -f deploy/compose.yml up -d
+docker compose -f deploy/compose.yml --env-file .env build
+docker compose -f deploy/compose.yml --env-file .env up -d
 ```
 
 Compose replaces the container with the new image. Check health before
@@ -60,14 +63,14 @@ dropping the previous image:
 
 ```sh
 curl -sS "http://127.0.0.1:${PORT:-3000}/health"
-docker compose -f deploy/compose.yml ps
+docker compose -f deploy/compose.yml --env-file .env ps
 docker images alloy-ts-net
 ```
 
 ## Logs
 
 ```sh
-docker compose -f deploy/compose.yml logs -f --tail=200
+docker compose -f deploy/compose.yml --env-file .env logs -f --tail=200
 ```
 
 Logs use the `json-file` driver, rotated at 10 MB with three files
@@ -81,19 +84,19 @@ Keep the last known-good image before a rebuild, for example
 ```sh
 docker tag alloy-ts-net:local alloy-ts-net:prev
 # ...build and start the new image, then if it is bad:
-docker compose -f deploy/compose.yml down
+docker compose -f deploy/compose.yml --env-file .env down
 docker tag alloy-ts-net:prev alloy-ts-net:local
-docker compose -f deploy/compose.yml up -d
+docker compose -f deploy/compose.yml --env-file .env up -d
 ```
 
 To go back to a git revision instead, check out that commit and run
-`docker compose -f deploy/compose.yml up --build -d`.
+`docker compose -f deploy/compose.yml --env-file .env up --build -d`.
 
 ## Stop
 
 ```sh
-docker compose -f deploy/compose.yml stop    # leaves the container, no auto-restart
-docker compose -f deploy/compose.yml down    # remove the container, keep the image
+docker compose -f deploy/compose.yml --env-file .env stop    # leaves the container, no auto-restart
+docker compose -f deploy/compose.yml --env-file .env down    # remove the container, keep the image
 ```
 
 `docker compose down` does not delete `alloy-ts-net:local`. Remove it with

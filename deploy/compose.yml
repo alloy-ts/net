@@ -1,6 +1,6 @@
 # Local runbook: from the repository root,
 #   cp -n .env.example .env
-#   docker compose -f deploy/compose.yml up --build
+#   docker compose -f deploy/compose.yml --env-file .env up --build
 #
 # This file does not deploy anywhere public.
 
@@ -18,9 +18,6 @@ services:
     env_file:
       - path: ../.env
         required: false
-    environment:
-      HOST: ${HOST:-0.0.0.0}
-      PORT: ${PORT:-3000}
     healthcheck:
       test:
         [
