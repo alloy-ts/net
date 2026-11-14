@@ -98,3 +98,29 @@ docker compose -f deploy/compose.yml down    # remove the container, keep the im
 
 `docker compose down` does not delete `alloy-ts-net:local`. Remove it with
 `docker image rm alloy-ts-net:local` when you no longer need it.
+
+## Tailscale overlay
+
+A separate Tailscale compose overlay can be merged with this file. It expects
+the service to be named `net`, `PORT=3000` (to match `serve.json`), `GET /health`,
+and `HOST` plus a clean stop on `SIGTERM`. Those hooks are already in
+`examples/server.ts` and `deploy/server.mjs`.
+
+Relative paths in the overlay (`./config`, `./secrets/ts_authkey`) resolve
+against this file's directory, `deploy/`. Put or symlink the overlay's
+`config/` and `secrets/` next to `deploy/compose.yml` before `up`, or copy
+the overlay itself into `deploy/` and run both `-f` flags from the
+repository root. Do not commit an auth key; keep it in a gitignored file
+and set `TS_AUTHKEY` only as `file:/run/secrets/ts_authkey`.
+
+For userspace Tailscale (the overlay default), set `HOST=127.0.0.1` so the
+process binds loopback only. This base file defaults `HOST` to `0.0.0.0` so
+published ports work without the overlay.
+
+```sh
+# Example, after the overlay files sit next to deploy/compose.yml:
+HOST=127.0.0.1 PORT=3000 docker compose \
+  -f deploy/compose.yml \
+  -f deploy/compose.tailscale.yml \
+  config
+```
