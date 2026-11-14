@@ -74,16 +74,26 @@ function vp(root: string, args: string[]): void {
   }
 }
 
-// Run scripts/repo-sanity.ts checks; print warnings and throw on errors.
+// Run scripts/repo-sanity.ts checks; print warnings and throw on errors, with
+// every finding, its fix and any notes in the message.
 function sanity(root: string, stage: string, options: CheckOptions = {}): void {
-  const { errors, warnings } = checkManifest(collectInput(root), options);
+  const { errors, warnings, hints, fixes } = checkManifest(collectInput(root), options);
   for (const w of warnings) console.warn(`[setup] ${stage} warning: ${w}`);
-  if (errors.length > 0) {
-    throw new Error(
-      `${stage} failed:\n${errors.map((e) => `  - ${e}`).join("\n")}` +
-        (stage === "pre-flight" ? "\nnothing was written to .git/config" : ""),
-    );
+  if (errors.length === 0) {
+    for (const h of hints) console.warn(`[setup] ${stage} note: ${h}`);
+    return;
   }
+  throw new Error(
+    [
+      `${stage} failed:`,
+      ...errors.map((e) => `  - ${e}`),
+      ...hints.map((h) => `  note: ${h}`),
+      ...(fixes.length > 0
+        ? ["  `npm run repo:sanity -- --fix` can repoint the listed remotes."]
+        : []),
+      ...(stage === "pre-flight" ? ["nothing was written to .git/config"] : []),
+    ].join("\n"),
+  );
 }
 
 export function setup(root: string): void {

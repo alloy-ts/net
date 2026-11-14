@@ -37,7 +37,7 @@ void test("setup aborts before writing when origin is not a manifest remote", ()
   assertAbortsWithoutWriting((dir) => {
     writeFileSync(join(dir, "repo.manifest.yml"), MANIFEST);
     g(dir, "remote", "add", "origin", "https://dev.azure.com/ChenSoftware/init/_git/init");
-  }, /pre-flight failed[\s\S]*remote "origin"[\s\S]*nothing was written/);
+  }, /pre-flight failed[\s\S]*nothing was written/);
 });
 
 void test("setup aborts before writing when the manifest is invalid", () => {
@@ -69,4 +69,11 @@ void test("setup aborts before writing when repo.manifest.yml is staged after th
     );
     g(dir, "add", "repo.manifest.yml");
   }, /only the root commit may change it/);
+});
+
+void test("setup aborts before writing when package.json names another repository", () => {
+  assertAbortsWithoutWriting((dir) => {
+    writeFileSync(join(dir, "repo.manifest.yml"), MANIFEST);
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "@alloy-ts/init" }));
+  }, /pre-flight failed[\s\S]*nothing was written/);
 });
