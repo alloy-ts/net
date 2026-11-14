@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { setup } from "./setup.ts";
+import { setup, shouldRunSetup } from "./setup.ts";
 
 const MANIFEST = `name: engine
 owner: alloy-ts
@@ -76,4 +76,19 @@ void test("setup aborts before writing when package.json names another repositor
     writeFileSync(join(dir, "repo.manifest.yml"), MANIFEST);
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "@alloy-ts/init" }));
   }, /pre-flight failed[\s\S]*nothing was written/);
+});
+
+void test("shouldRunSetup runs for a developer install from the repository root", () => {
+  assert.equal(shouldRunSetup("/repo", { npm_command: "install", INIT_CWD: "/repo" }).run, true);
+  assert.equal(shouldRunSetup("/repo", { npm_command: "ci", INIT_CWD: "/repo/" }).run, true);
+  assert.equal(shouldRunSetup("/repo", {}).run, true);
+});
+
+void test("shouldRunSetup skips pack, publish and installs into another project", () => {
+  assert.equal(shouldRunSetup("/repo", { npm_command: "publish", INIT_CWD: "/repo" }).run, false);
+  assert.equal(shouldRunSetup("/repo", { npm_command: "pack", INIT_CWD: "/repo" }).run, false);
+  assert.equal(
+    shouldRunSetup("/repo", { npm_command: "install", INIT_CWD: "/consumer" }).run,
+    false,
+  );
 });

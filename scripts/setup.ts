@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { checkManifest, collectInput, type CheckOptions } from "./repo-sanity.ts";
 
 const defaultRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -138,12 +138,37 @@ export function setup(root: string): void {
 
 export { parseManifestConfig };
 
+// npm also runs `prepare` while packing or publishing, and when this package is
+// installed from git or a folder into another project. Setup only belongs in a
+// developer's own checkout: a plain `npm install` / `npm ci` (or a direct run)
+// started from this repository's root. Anywhere else it would rewrite the
+// wrong .git/config or fail a consumer's install.
+export function shouldRunSetup(
+  root: string,
+  env: Record<string, string | undefined>,
+): { run: boolean; reason: string } {
+  const command = env["npm_command"];
+  if (command !== undefined && command !== "install" && command !== "ci") {
+    return { run: false, reason: `npm ${command} is not a developer install` };
+  }
+  const initCwd = env["INIT_CWD"];
+  if (initCwd !== undefined && resolve(initCwd) !== resolve(root)) {
+    return { run: false, reason: `installed as a dependency of ${initCwd}` };
+  }
+  return { run: true, reason: "developer checkout" };
+}
+
 // Run only when executed directly (the prepare hook), not when imported.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  try {
-    setup(defaultRoot);
-  } catch (err) {
-    console.error(`[setup] ${err instanceof Error ? err.message : String(err)}`);
-    process.exitCode = 1;
+  const decision = shouldRunSetup(defaultRoot, process.env);
+  if (decision.run) {
+    try {
+      setup(defaultRoot);
+    } catch (err) {
+      console.error(`[setup] ${err instanceof Error ? err.message : String(err)}`);
+      process.exitCode = 1;
+    }
+  } else {
+    console.log(`[setup] skipped: ${decision.reason}`);
   }
 }
