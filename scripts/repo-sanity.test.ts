@@ -77,6 +77,17 @@ void test("config that differs from the manifest is an error", () => {
   );
 });
 
+void test("skipConfigValues ignores config that setup has not applied yet", () => {
+  const empty = new Map([
+    ["remote.origin.url", ["https://dev.azure.com/ChenSoftware/alloy-ts/_git/engine"]],
+  ]);
+  assert.equal(checkManifest(input({ gitConfig: empty })).errors.length, 3);
+  assert.deepEqual(
+    checkManifest(input({ gitConfig: empty }), { skipConfigValues: true }).errors,
+    [],
+  );
+});
+
 void test("boolean config values compare by meaning", () => {
   assert.deepEqual(
     checkManifest(input({ gitConfig: config({ "commit.gpgsign": "yes" }) })).errors,

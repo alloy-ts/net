@@ -4,11 +4,12 @@
 //   node --import @oxc-node/core/register scripts/repo-sanity.ts [--report]
 //   npm run repo:sanity
 //
-// It runs from `npm run prepare` (scripts/setup.ts, after the manifest config
-// is applied) and from the pre-commit, post-checkout, post-merge and
+// scripts/setup.ts (`npm run prepare`) runs it before writing anything to
+// .git/config and aborts on errors, then verifies again after applying the
+// manifest config. It also runs from the pre-commit, post-checkout, post-merge and
 // post-rewrite git hooks. It exits 1 on any error, which blocks a commit;
 // `--report` prints the same findings but always exits 0, for events that
-// cannot be undone (setup, checkout, merge, rewrite).
+// cannot be undone (checkout, merge, rewrite).
 //
 //   1. repo.manifest.yml exists and has a name, owner, config and remotes.
 //   2. Every manifest `config:` entry is set to the same value in .git/config.
@@ -132,7 +133,13 @@ function isTemplate(config: Map<string, string[]>): boolean {
   return v !== undefined && TRUE.has(v.toLowerCase());
 }
 
-export function checkManifest(input: CheckInput): CheckResult {
+export type CheckOptions = {
+  // Skip comparing manifest `config:` values with .git/config. scripts/setup.ts
+  // uses this for its pre-flight, before it applies those values.
+  skipConfigValues?: boolean;
+};
+
+export function checkManifest(input: CheckInput, options: CheckOptions = {}): CheckResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -148,7 +155,7 @@ export function checkManifest(input: CheckInput): CheckResult {
   if (manifest.remote.length === 0) errors.push(`${MANIFEST_FILE}: no \`remote:\` entries`);
 
   // Manifest config vs .git/config.
-  for (const { key, value } of manifest.config) {
+  for (const { key, value } of options.skipConfigValues ? [] : manifest.config) {
     const actual = input.gitConfig.get(configKey(key))?.at(-1);
     if (actual === undefined) {
       errors.push(`.git/config: ${key} is not set (manifest: ${value}); run \`npm run prepare\``);
