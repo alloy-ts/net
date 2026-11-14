@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   applyFixes,
+  ownerScope,
+  packageIdentity,
   checkManifest,
   collectInput,
   normalizeRemote,
@@ -235,7 +237,7 @@ void test("every name conflict reports location, expected, actual and a fix", ()
   );
   assert.match(
     name!,
-    /^package.json name: expected "@alloy-ts\/engine", actual "repository"[\s\S]*fix: set "name": "@alloy-ts\/engine"[\s\S]*commit --amend/,
+    /^package.json name: expected "@alloy-ts\/engine" or "engine" \(manifest owner "alloy-ts" is unscoped\), actual "repository"[\s\S]*fix: set "name": "@alloy-ts\/engine"[\s\S]*commit --amend/,
   );
   assert.match(
     repo!,
@@ -292,4 +294,82 @@ void test("applyFixes repoints origin and keeps embedded credentials", () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+const ENGINE_PACKAGE = (name: string) =>
+  JSON.stringify({
+    name,
+    repository: { type: "git", url: "git+https://repo.chen.software/alloy-ts/engine.git" },
+  });
+const SCOPED = MANIFEST.replace("owner: alloy-ts", 'owner: "@alloy-ts"');
+
+void test("ownerScope and packageIdentity follow the @ in the manifest owner", () => {
+  assert.deepEqual(ownerScope("@alloy-ts"), { scoped: true, slug: "alloy-ts" });
+  assert.deepEqual(ownerScope("alloy-ts"), { scoped: false, slug: "alloy-ts" });
+  assert.deepEqual(packageIdentity({ name: "engine", owner: "@alloy-ts" }), {
+    expected: "@alloy-ts/engine",
+    accepted: ["@alloy-ts/engine"],
+  });
+  assert.deepEqual(packageIdentity({ name: "engine", owner: "alloy-ts" }), {
+    expected: "@alloy-ts/engine",
+    accepted: ["@alloy-ts/engine", "engine"],
+  });
+});
+
+void test("scoped owner: @alloy-ts/<name> passes, anything else needs fixing", () => {
+  const ok = checkManifest(
+    input({ manifestText: SCOPED, packageJson: ENGINE_PACKAGE("@alloy-ts/engine") }),
+  );
+  assert.deepEqual([ok.errors, ok.warnings, ok.hints], [[], [], []]);
+  for (const name of ["engine", "@other/engine", "@alloy-ts/core"]) {
+    const { errors } = checkManifest(
+      input({ manifestText: SCOPED, packageJson: ENGINE_PACKAGE(name) }),
+    );
+    assert.equal(errors.length, 1, name);
+    assert.match(
+      errors[0]!,
+      new RegExp(
+        `^package.json name: expected "@alloy-ts/engine" \\(manifest owner "@alloy-ts" is scoped\\), actual "${name}"[\\s\\S]*fix: set "name": "@alloy-ts/engine"`,
+      ),
+    );
+  }
+});
+
+void test("unscoped owner: the scoped name passes with a note, the bare name passes", () => {
+  const scopedPkg = checkManifest(input({ packageJson: ENGINE_PACKAGE("@alloy-ts/engine") }));
+  assert.deepEqual(scopedPkg.errors, []);
+  assert.match(
+    scopedPkg.hints.join(),
+    /package.json needs no fix; [\s\S]*owner should be "@alloy-ts"/,
+  );
+  const bare = checkManifest(input({ packageJson: ENGINE_PACKAGE("engine") }));
+  assert.deepEqual([bare.errors, bare.hints], [[], []]);
+  const { errors } = checkManifest(input({ packageJson: ENGINE_PACKAGE("@alloy-ts/core") }));
+  assert.match(
+    errors[0]!,
+    /expected "@alloy-ts\/engine" or "engine" \(manifest owner "alloy-ts" is unscoped\)/,
+  );
+});
+
+void test("a scoped owner is stripped of @ in derived names and paths", () => {
+  const result = checkManifest(
+    input({
+      manifestText: SCOPED,
+      packageJson: ENGINE_PACKAGE("repository"),
+      cargoToml: '[package]\nname = "repository"\n',
+    }),
+  );
+  assert.match(result.errors.join(), /fix: set name = "alloy-engine"/);
+  assert.match(result.hints.join(), /set origin to \.\.\.\/alloy-ts\/_git\/<name>/);
+  assert.doesNotMatch(
+    result.errors.join() + result.hints.join(),
+    /@alloy-ts\/_git|"@alloy-engine"/,
+  );
+});
+
+void test("an unquoted @ owner is flagged", () => {
+  const { warnings } = checkManifest(
+    input({ manifestText: MANIFEST.replace("owner: alloy-ts", "owner: @alloy-ts") }),
+  );
+  assert.match(warnings.join(), /should be quoted/);
 });

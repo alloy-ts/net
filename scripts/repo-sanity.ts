@@ -90,6 +90,27 @@ function list(text: string, key: string): string[] {
   return items;
 }
 
+// `owner` starting with "@" (quoted in YAML, e.g. owner: "@alloy-ts") declares
+// an npm scope. `slug` is the owner without "@", used in repo paths and URLs
+// such as dev.azure.com/ChenSoftware/<slug>/_git/<name>.
+export function ownerScope(owner: string): { scoped: boolean; slug: string } {
+  const scoped = owner.startsWith("@");
+  return { scoped, slug: scoped ? owner.slice(1) : owner };
+}
+
+// The package.json name the manifest calls for, and the names it accepts.
+//  - scoped owner "@alloy-ts":  only "@alloy-ts/<name>".
+//  - unscoped owner "alloy-ts": "@alloy-ts/<name>" (what every alloy-ts repo
+//    uses today, so it stays the expected name) or the unscoped "<name>".
+export function packageIdentity(manifest: Pick<Manifest, "name" | "owner">): {
+  expected: string;
+  accepted: string[];
+} {
+  const { scoped, slug } = ownerScope(manifest.owner);
+  const expected = `@${slug}/${manifest.name}`;
+  return { expected, accepted: scoped ? [expected] : [expected, manifest.name] };
+}
+
 export function parseManifest(text: string): Manifest {
   return {
     name: scalar(text, "name"),
@@ -166,6 +187,11 @@ export function checkManifest(input: CheckInput, options: CheckOptions = {}): Ch
   const manifest = parseManifest(input.manifestText);
   for (const field of ["name", "owner"] as const) {
     if (!manifest[field]) errors.push(`${MANIFEST_FILE}: missing \`${field}\``);
+  }
+  if (/^owner:[ \t]*@/m.test(input.manifestText)) {
+    warnings.push(
+      `${MANIFEST_FILE}: owner ${manifest.owner} should be quoted ("${manifest.owner}"); a plain YAML value cannot start with "@"`,
+    );
   }
   if (manifest.config.length === 0) errors.push(`${MANIFEST_FILE}: no \`config:\` entries`);
   if (manifest.remote.length === 0) errors.push(`${MANIFEST_FILE}: no \`remote:\` entries`);
@@ -255,11 +281,18 @@ export function checkManifest(input: CheckInput, options: CheckOptions = {}): Ch
     } catch {
       errors.push("package.json: not valid JSON");
     }
-    const want = `@${manifest.owner}/${manifest.name}`;
-    if (pkg.name !== want) {
+    const { scoped, slug } = ownerScope(manifest.owner);
+    const { expected, accepted } = packageIdentity(manifest);
+    if (typeof pkg.name !== "string" || !accepted.includes(pkg.name)) {
       conflict(
-        `package.json name: expected ${JSON.stringify(want)}, actual ${JSON.stringify(pkg.name)}\n` +
-          `    fix: set "name": ${JSON.stringify(want)} in package.json (for a template rename, ${rename})`,
+        `package.json name: expected ${accepted.map((n) => JSON.stringify(n)).join(" or ")}` +
+          ` (manifest owner ${JSON.stringify(manifest.owner)} is ${scoped ? "scoped" : "unscoped"}), actual ${JSON.stringify(pkg.name)}\n` +
+          `    fix: set "name": ${JSON.stringify(expected)} in package.json (for a template rename, ${rename})`,
+      );
+    } else if (!scoped && pkg.name === expected) {
+      hints.push(
+        `package.json is scoped (${JSON.stringify(expected)}) but ${MANIFEST_FILE} owner ${JSON.stringify(manifest.owner)} has no "@". ` +
+          `package.json needs no fix; to declare the scope, the manifest owner should be "@${slug}" (quoted), which can only change in the root commit.`,
       );
     }
     const repo = pkg.repository;
@@ -283,7 +316,7 @@ export function checkManifest(input: CheckInput, options: CheckOptions = {}): Ch
     if (crate !== manifest.name && !crate?.endsWith(`-${manifest.name}`)) {
       conflict(
         `Cargo.toml [package] name: expected ${JSON.stringify(manifest.name)} or "<prefix>-${manifest.name}", actual ${JSON.stringify(crate)}\n` +
-          `    fix: set name = "${manifest.owner.split("-")[0]}-${manifest.name}" under [package] in Cargo.toml (for a template rename, ${rename})`,
+          `    fix: set name = "${ownerScope(manifest.owner).slug.split("-")[0]}-${manifest.name}" under [package] in Cargo.toml (for a template rename, ${rename})`,
       );
     }
   }
@@ -292,7 +325,7 @@ export function checkManifest(input: CheckInput, options: CheckOptions = {}): Ch
     hints.push(
       `${MANIFEST_FILE} names this repository "${manifest.name}" (owner "${manifest.owner}") and is the source of truth. ` +
         `If that name is the wrong one, it can only change in the root commit: amend the root so it changes nothing but ${MANIFEST_FILE}, ` +
-        `authored and committed by ${REPO_EMAILS[0]}, save it as refs/roots/main, replay main onto it, then fix package.json and Cargo.toml in the head commit and set origin to .../alloy-ts/_git/<name>. ` +
+        `authored and committed by ${REPO_EMAILS[0]}, save it as refs/roots/main, replay main onto it, then fix package.json and Cargo.toml in the head commit and set origin to .../${ownerScope(manifest.owner).slug}/_git/<name>. ` +
         `That rewrites history and needs an approved force-push. Nothing is changed automatically.`,
     );
     if (template) {
