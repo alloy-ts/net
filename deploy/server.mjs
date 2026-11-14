@@ -4,11 +4,27 @@
  */
 import { RegExpRouter, Server } from "../dist/index.mjs";
 
-const port = Number(process.env.PORT ?? 3000);
-const host = process.env.HOST ?? "0.0.0.0";
-if (!Number.isInteger(port) || port < 0 || port > 65535) {
-  throw new Error(`PORT must be an integer 0-65535, got ${JSON.stringify(process.env.PORT)}`);
+function parsePort(raw) {
+  if (raw === undefined || raw === "") {
+    return 3000;
+  }
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`PORT must be an integer 1-65535, got ${JSON.stringify(raw)}`);
+  }
+  return port;
 }
+
+function parseHost(raw) {
+  const host = raw === undefined || raw === "" ? "0.0.0.0" : raw;
+  if (host === "localhost") {
+    return "127.0.0.1";
+  }
+  return host;
+}
+
+const port = parsePort(process.env.PORT);
+const host = parseHost(process.env.HOST);
 
 const app = new Server({
   router: new RegExpRouter(),
