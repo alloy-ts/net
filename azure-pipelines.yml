@@ -1,0 +1,185 @@
+# Azure Pipelines: build, test, cross-build every napi target, publish.
+#
+#   BuildTest  linux: npm ci, build, vp check + cargo check, npm test
+#              (node --test + cargo test)
+#   Cross      one job per napi target. Native agents where Microsoft hosts
+#              one (linux x64, macOS, Windows; the other arch on macOS and
+#              Windows uses Xcode/MSVC), napi --cross-compile with
+#              cargo-zigbuild for linux arm64 and musl. Every addon the agent
+#              can load is smoke-tested; each target uploads bindings-<platform>.
+#   Publish    v* tags and main only, behind the `npm-publish` environment
+#              (add an Approvals check to it). scripts/publish.ts assembles the
+#              root + per-platform packages (napi create-npm-dirs / artifacts /
+#              pre-publish -t npm) and publishes them.
+#
+# The same steps run locally: `npm run ci` and `npm run publish:npm`.
+#
+# Variables (pipeline variables or a Library group; never commit values):
+#   NPM_TOKEN     secret, required for a real publish; mapped into env below
+#   NPM_REGISTRY  default https://registry.npmjs.org/
+#   NPM_TAG       default latest (e.g. next for prereleases)
+#   NPM_DRY_RUN   true = npm publish --dry-run
+# The dryRun parameter (Run pipeline dialog) forces a dry run for one run.
+#
+# `npm ci --ignore-scripts` skips only this package's `prepare` (setup.ts,
+# which configures a developer clone's .git/config); no dependency has
+# install scripts.
+
+trigger:
+  branches:
+    include:
+      - main
+      - feat/*
+      - fix/*
+  tags:
+    include:
+      - v*
+
+pr:
+  branches:
+    include:
+      - main
+
+parameters:
+  - name: dryRun
+    displayName: Publish as npm --dry-run
+    type: boolean
+    default: false
+
+variables:
+  NODE_VERSION: "24.x"
+  npm_config_cache: $(Pipeline.Workspace)/.npm
+  CARGO_TERM_COLOR: always
+  NPM_REGISTRY: https://registry.npmjs.org/
+  NPM_TAG: latest
+  NPM_DRY_RUN: "false"
+
+stages:
+  - stage: BuildTest
+    displayName: Build, check and test
+    jobs:
+      - job: linux
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - template: .azure/steps/setup.yml
+          - script: npm ci --ignore-scripts
+            displayName: npm ci
+          - script: npm run ci -- build check test
+            displayName: build, check, test
+
+  - stage: Cross
+    displayName: Cross-build napi targets
+    dependsOn: BuildTest
+    jobs:
+      - job: napi
+        displayName: napi build
+        strategy:
+          matrix:
+            linux_x64_gnu:
+              TARGET: x86_64-unknown-linux-gnu
+              PLATFORM: linux-x64-gnu
+              IMAGE: ubuntu-latest
+              CROSS_TOOLS: "false"
+            linux_arm64_gnu:
+              TARGET: aarch64-unknown-linux-gnu
+              PLATFORM: linux-arm64-gnu
+              IMAGE: ubuntu-latest
+              CROSS_TOOLS: "true"
+            linux_x64_musl:
+              TARGET: x86_64-unknown-linux-musl
+              PLATFORM: linux-x64-musl
+              IMAGE: ubuntu-latest
+              CROSS_TOOLS: "true"
+            linux_arm64_musl:
+              TARGET: aarch64-unknown-linux-musl
+              PLATFORM: linux-arm64-musl
+              IMAGE: ubuntu-latest
+              CROSS_TOOLS: "true"
+            darwin_x64:
+              TARGET: x86_64-apple-darwin
+              PLATFORM: darwin-x64
+              IMAGE: macOS-latest
+              CROSS_TOOLS: "false"
+            darwin_arm64:
+              TARGET: aarch64-apple-darwin
+              PLATFORM: darwin-arm64
+              IMAGE: macOS-latest
+              CROSS_TOOLS: "false"
+            win32_x64_msvc:
+              TARGET: x86_64-pc-windows-msvc
+              PLATFORM: win32-x64-msvc
+              IMAGE: windows-latest
+              CROSS_TOOLS: "false"
+            win32_arm64_msvc:
+              TARGET: aarch64-pc-windows-msvc
+              PLATFORM: win32-arm64-msvc
+              IMAGE: windows-latest
+              CROSS_TOOLS: "false"
+        pool:
+          vmImage: $(IMAGE)
+        steps:
+          - template: .azure/steps/setup.yml
+            parameters:
+              target: $(TARGET)
+          - bash: |
+              set -euo pipefail
+              python3 -m pip install --user --upgrade cargo-zigbuild ziglang
+              bin="$(python3 -m site --user-base)/bin"
+              # cargo-zigbuild looks for `zig` on PATH; ziglang ships it as a module.
+              printf '#!/bin/sh\nexec python3 -m ziglang "$@"\n' > "$bin/zig"
+              chmod +x "$bin/zig"
+              echo "##vso[task.prependpath]$bin"
+            displayName: install cargo-zigbuild + zig
+            condition: and(succeeded(), eq(variables['CROSS_TOOLS'], 'true'))
+          - script: npm ci --ignore-scripts
+            displayName: npm ci
+          - script: npm run ci -- cross --strict --targets $(TARGET)
+            displayName: napi build $(TARGET)
+          - publish: artifacts
+            artifact: bindings-$(PLATFORM)
+            displayName: upload bindings-$(PLATFORM)
+
+  - stage: Publish
+    displayName: Publish to npm
+    dependsOn: Cross
+    condition: >-
+      and(succeeded(),
+          or(startsWith(variables['Build.SourceBranch'], 'refs/tags/v'),
+             eq(variables['Build.SourceBranch'], 'refs/heads/main')))
+    jobs:
+      - deployment: npm
+        displayName: npm publish
+        environment: npm-publish
+        pool:
+          vmImage: ubuntu-latest
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - template: .azure/steps/setup.yml
+                - script: npm ci --ignore-scripts
+                  displayName: npm ci
+                - script: npm run build
+                  displayName: build JS loader and typings
+                - download: current
+                  patterns: bindings-*/*.node
+                  displayName: download bindings
+                - bash: |
+                    set -euo pipefail
+                    mkdir -p artifacts
+                    find "$(Pipeline.Workspace)" -path '*/bindings-*/*.node' -exec cp {} artifacts/ \;
+                    ls -l artifacts
+                    npm run ci -- smoke
+                  displayName: collect and smoke bindings
+                - bash: |
+                    set -euo pipefail
+                    args=(--artifacts artifacts --registry "$NPM_REGISTRY" --tag "$NPM_TAG")
+                    if [ "${{ parameters.dryRun }}" = "True" ] || [ "$NPM_DRY_RUN" = "true" ]; then
+                      args+=(--dry-run)
+                    fi
+                    npm run publish:npm -- "${args[@]}"
+                  displayName: napi pre-publish + npm publish
+                  env:
+                    NPM_TOKEN: $(NPM_TOKEN)
