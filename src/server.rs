@@ -149,6 +149,8 @@ struct Inner {
     legacy_remote: StdMutex<Option<Arc<RemoteFn>>>,
     rocket: Mutex<Option<Running>>,
     timer: StdMutex<Option<JsRef>>,
+    shutdown_grace: u32,
+    shutdown_mercy: u32,
 }
 
 struct LegacyTable {
@@ -242,6 +244,8 @@ impl Server {
         let mut strict = true;
         let mut port = 3000u16;
         let mut host = "127.0.0.1".to_owned();
+        let mut shutdown_grace = 10u32;
+        let mut shutdown_mercy = 3u32;
         let mut router =
             SharedRouter::Smart(Arc::new(StdMutex::new(router::SmartRouter::default())));
         let mut get_path = None;
@@ -256,6 +260,12 @@ impl Server {
             }
             if let Ok(value) = options.get_named_property::<String>("host") {
                 host = value;
+            }
+            if let Ok(value) = options.get_named_property::<u32>("shutdownGrace") {
+                shutdown_grace = value;
+            }
+            if let Ok(value) = options.get_named_property::<u32>("shutdownMercy") {
+                shutdown_mercy = value;
             }
             if let Ok(value) = options.get_named_property::<Unknown>("router")
                 && is_defined(&value)
@@ -313,6 +323,8 @@ impl Server {
                     legacy_remote: StdMutex::new(legacy_remote(&env, legacy_routes, legacy_fetch)?),
                     rocket: Mutex::new(None),
                     timer: StdMutex::new(None),
+                    shutdown_grace,
+                    shutdown_mercy,
                 }),
                 base_path: "/".to_owned(),
                 path: StdMutex::new("/".to_owned()),
@@ -2412,8 +2424,8 @@ async fn rocket_start(inner: Arc<Inner>) -> Result<u16> {
     config.port = inner.configured_port;
     config.log_level = rocket::config::LogLevel::Off;
     config.shutdown.ctrlc = false;
-    config.shutdown.grace = 0;
-    config.shutdown.mercy = 0;
+    config.shutdown.grace = inner.shutdown_grace;
+    config.shutdown.mercy = inner.shutdown_mercy;
     config.limits = rocket::data::Limits::default()
         .limit("bytes", (MAX_BODY_BYTES as usize).bytes())
         .limit("string", (MAX_BODY_BYTES as usize).bytes())

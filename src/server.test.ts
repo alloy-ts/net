@@ -84,6 +84,25 @@ describe("Rocket Server", () => {
     await second.start();
     await second.stop();
   });
+  test("stop() lets an in-flight request finish", async () => {
+    const server = new Server({ port: 0 });
+    server.get("/slow", async (c) => {
+      await delay(1500);
+      return c.text("done");
+    });
+    const port = await server.start();
+    try {
+      const pending = globalThis.fetch(`http://127.0.0.1:${port}/slow`);
+      await delay(100);
+      const stopping = server.stop();
+      const response = await pending;
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe("done");
+      await stopping;
+    } finally {
+      await server.stop();
+    }
+  });
 });
 
 test("the packaged Rocket server keeps a standalone Node process alive", async () => {
