@@ -14,6 +14,12 @@
     "type": "git",
     "url": "git+https://repo.chen.software/yumin-chen/repository.git"
   },
+  "files": [
+    "dist/index.js",
+    "dist/index.d.ts",
+    "dist/index.mjs",
+    "dist/index.d.mts"
+  ],
   "type": "module",
   "exports": {
     ".": "./dist/index.mjs",
