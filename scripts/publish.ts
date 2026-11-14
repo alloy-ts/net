@@ -2,7 +2,7 @@
 // flow: one root package plus one optional package per platform.
 //
 //   npm run publish:npm -- [--artifacts artifacts] [--registry URL] [--tag TAG]
-//                          [--version X.Y.Z-pre] [--name NAME] [--allow-missing] [--dry-run]
+//                          [--allow-missing] [--dry-run]
 //
 // Steps, all inside a throwaway staging dir (.publish/) so the checkout is
 // never modified:
@@ -41,8 +41,6 @@ export type PublishOptions = {
   artifacts: string;
   registry: string;
   tag: string;
-  version?: string;
-  name?: string;
   allowMissing: boolean;
   dryRun: boolean;
 };
@@ -57,22 +55,26 @@ type Pkg = {
 };
 
 // The package.json that goes to the registry: no lifecycle scripts (a
-// consumer must never run build.ts or setup.ts), optional overrides for a
-// throwaway name/version, and napi.targets trimmed to the built addons when
-// --allow-missing is given.
-export function stagePackageJson(
-  pkg: Pkg,
-  opts: { version?: string; name?: string; targets?: string[] },
-): Pkg {
+// consumer must never run build.ts or setup.ts) and napi.targets trimmed to
+// the built addons when --allow-missing is given.
+export function stagePackageJson(pkg: Pkg, opts: { targets?: string[] }): Pkg {
   const out: Pkg = { ...pkg, napi: { ...pkg.napi } };
   delete out.scripts;
-  if (opts.version) out.version = opts.version;
-  if (opts.name) {
-    out.name = opts.name;
-    out.napi = { ...out.napi, packageName: opts.name };
-  }
   if (opts.targets) out.napi = { ...out.napi, targets: opts.targets };
   return out;
+}
+
+// napi bakes the package name (platform packages are `<name>-<platform>`) and
+// version into the generated loader. Name and version therefore come only
+// from package.json at build time; refuse to publish a stale loader.
+export function loaderMismatch(loader: string, name: string, version: string): string | undefined {
+  if (!loader.includes(`require('${name}-`)) {
+    return `dist/index.js does not load ${name}-<platform>; rebuild after changing the package name`;
+  }
+  if (!loader.includes(`expected ${version} but got`)) {
+    return `dist/index.js was built for another version than ${version}; rebuild`;
+  }
+  return undefined;
 }
 
 // npm userconfig body for token auth. `${NPM_TOKEN}` stays literal: npm
@@ -146,11 +148,11 @@ export function publish(opts: PublishOptions): void {
   const stage = join(root, ".publish");
   rmSync(stage, { recursive: true, force: true });
   mkdirSync(stage, { recursive: true });
-  const staged = stagePackageJson(pkg, {
-    version: opts.version,
-    name: opts.name,
-    targets: missing.length > 0 ? present : undefined,
-  });
+  const loader = join(root, "dist", "index.js");
+  if (!existsSync(loader)) throw new Error("dist/index.js is missing; run `npm run build` first");
+  const mismatch = loaderMismatch(readFileSync(loader, "utf8"), pkg.name, pkg.version);
+  if (mismatch) throw new Error(mismatch);
+  const staged = stagePackageJson(pkg, { targets: missing.length > 0 ? present : undefined });
   writeFileSync(join(stage, "package.json"), `${JSON.stringify(staged, null, 2)}\n`);
   for (const f of [...(pkg.files ?? []), "Licence", "ReadMe.md"]) {
     const from = join(root, f);
@@ -220,8 +222,6 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv): PublishOption
     if (a === "--artifacts") opts.artifacts = value();
     else if (a === "--registry") opts.registry = value();
     else if (a === "--tag") opts.tag = value();
-    else if (a === "--version") opts.version = value();
-    else if (a === "--name") opts.name = value();
     else if (a === "--allow-missing") opts.allowMissing = true;
     else if (a === "--dry-run") opts.dryRun = true;
     else throw new Error(`unknown argument: ${a}`);

@@ -1,20 +1,35 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { authConfig, availableTargets, hasToken, parseArgs, stagePackageJson } from "./publish.ts";
+import {
+  authConfig,
+  availableTargets,
+  hasToken,
+  loaderMismatch,
+  parseArgs,
+  stagePackageJson,
+} from "./publish.ts";
 
-void test("stagePackageJson strips scripts and applies throwaway name, version and targets", () => {
+void test("stagePackageJson strips scripts and trims targets", () => {
   const pkg = {
     name: "repository",
     version: "0.0.0",
     scripts: { prepare: "node scripts/setup.ts", build: "node build.ts" },
     napi: { binaryName: "repository", targets: ["a", "b"] },
   };
-  const out = stagePackageJson(pkg, { version: "0.0.1-ci.1", name: "@x/y", targets: ["a"] });
+  const out = stagePackageJson(pkg, { targets: ["a"] });
   assert.equal(out.scripts, undefined);
-  assert.equal(out.name, "@x/y");
-  assert.equal(out.version, "0.0.1-ci.1");
-  assert.deepEqual(out.napi, { binaryName: "repository", packageName: "@x/y", targets: ["a"] });
+  assert.deepEqual(out.napi, { binaryName: "repository", targets: ["a"] });
   assert.ok(pkg.scripts, "the input is not modified");
+  assert.deepEqual(stagePackageJson(pkg, {}).napi?.targets, ["a", "b"]);
+});
+
+void test("loaderMismatch rejects a loader built for another name or version", () => {
+  const loader =
+    "require('@x/y-linux-x64-gnu')\n" +
+    "throw new Error(`Native binding package version mismatch, expected 1.2.3 but got ${v}.`)";
+  assert.equal(loaderMismatch(loader, "@x/y", "1.2.3"), undefined);
+  assert.match(loaderMismatch(loader, "@x/z", "1.2.3") ?? "", /package name/);
+  assert.match(loaderMismatch(loader, "@x/y", "1.2.4") ?? "", /another version/);
 });
 
 void test("authConfig references NPM_TOKEN without embedding it", () => {
