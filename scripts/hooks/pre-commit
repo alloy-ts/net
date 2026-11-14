@@ -1,5 +1,8 @@
 #!/usr/bin/env sh
 # Project pre-commit hook, run by the Vite+ dispatcher in scripts/hooks/_.
+# scripts/repo-sanity.ts blocks the commit when .git/config, the remotes or the
+# staged changes disagree with repo.manifest.yml.
+node --import @oxc-node/core/register scripts/repo-sanity.ts
 # `vp staged --fail-on-changes` executes the `staged` task defined in
 # vite.config.ts (vp check --fix, and *.rs -> cargo clippy/fmt) against only
 # the files staged for this commit, and fails if it changed any of them so the
