@@ -37,12 +37,24 @@ app.get("/ping", (c) => c.text("pong"));
 const bound = await app.start();
 console.log(`listening on http://${app.host}:${bound}`);
 
+let stopping = false;
 async function shutdown(signal) {
+  if (stopping) {
+    return;
+  }
+  stopping = true;
   console.log(`received ${signal}, stopping`);
+  const timeout = setTimeout(() => {
+    console.error("shutdown timed out");
+    process.exit(1);
+  }, 15_000);
+  timeout.unref();
   try {
     await app.stop();
-  } finally {
     process.exit(0);
+  } catch (error) {
+    console.error(error);
+    process.exit(1);
   }
 }
 
