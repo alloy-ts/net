@@ -14,3 +14,8 @@ dist/
 artifacts/
 npm/
 .publish/
+
+# Cloudflare Worker (wrangler.toml): local state, dry-run bundles, local secrets
+.wrangler/
+.dev.vars*
+!.dev.vars.example

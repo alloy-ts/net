@@ -39,7 +39,10 @@
     "prepare": "node --import @oxc-node/core/register scripts/setup.ts",
     "repo:sanity": "node --import @oxc-node/core/register scripts/repo-sanity.ts",
     "ci": "node --import @oxc-node/core/register scripts/ci.ts",
-    "publish:npm": "node --import @oxc-node/core/register scripts/publish.ts"
+    "publish:npm": "node --import @oxc-node/core/register scripts/publish.ts",
+    "worker:dev": "npx --yes wrangler@4.162.0 dev",
+    "worker:check": "npx --yes wrangler@4.162.0 deploy --dry-run --outdir .wrangler/dry-run",
+    "worker:deploy": "npx --yes wrangler@4.162.0 deploy"
   },
   "devDependencies": {
     "@emnapi/core": "^1.11.3",

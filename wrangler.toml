@@ -1,0 +1,29 @@
+# Cloudflare Worker for alloy-net. See deploy/CLOUDFLARE.md.
+# The Worker answers /health and forwards everything else to ORIGIN_URL; the
+# native addon never runs on Workers. No account_id here: wrangler reads
+# CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN from the environment, or the
+# `wrangler login` session.
+name = "alloy-net"
+main = "src/worker.ts"
+compatibility_date = "2026-11-01"
+workers_dev = true
+preview_urls = false
+
+[vars]
+# Placeholder. `.invalid` never resolves, so the Worker answers 503 for
+# proxied routes until this is set to the net origin (Cloud Run URL or a
+# public Tailscale Funnel URL). Override per environment or in the dashboard.
+ORIGIN_URL = "https://origin.invalid"
+
+[observability]
+enabled = true
+
+# Custom domain. Uncomment once the zone is on the Cloudflare account; the
+# hostname must not already have a DNS record.
+# routes = [
+#   { pattern = "net.example.com", custom_domain = true },
+# ]
+# Or a route on an existing proxied hostname:
+# routes = [
+#   { pattern = "example.com/api/*", zone_name = "example.com" },
+# ]
