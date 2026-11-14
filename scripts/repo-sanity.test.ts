@@ -4,7 +4,13 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { checkManifest, collectInput, normalizeRemote, type CheckInput } from "./repo-sanity.ts";
+import {
+  applyFixes,
+  checkManifest,
+  collectInput,
+  normalizeRemote,
+  type CheckInput,
+} from "./repo-sanity.ts";
 
 const MANIFEST = `name: engine
 version: 0.0.0
@@ -44,7 +50,7 @@ function input(over: Partial<CheckInput> = {}): CheckInput {
 }
 
 void test("a consistent repository passes", () => {
-  assert.deepEqual(checkManifest(input()), { errors: [], warnings: [] });
+  assert.deepEqual(checkManifest(input()), { errors: [], warnings: [], hints: [], fixes: [] });
 });
 
 void test("normalizeRemote drops credentials, scheme, git+ and .git", () => {
@@ -104,7 +110,10 @@ void test("a remote outside the manifest is an error and never shows credentials
     }),
   );
   assert.equal(errors.length, 1);
-  assert.match(errors[0]!, /remote "origin" url dev.azure.com\/chensoftware\/init\/_git\/init/);
+  assert.match(
+    errors[0]!,
+    /remote "origin" url: expected [^,]+, actual dev.azure.com\/chensoftware\/init\/_git\/init/,
+  );
   assert.doesNotMatch(errors[0]!, /secret/);
 });
 
@@ -149,26 +158,26 @@ void test("with no HEAD and nothing staged there is no root commit to check", ()
   assert.deepEqual(checkManifest(input({ hasHead: false, staged: [] })).errors, []);
 });
 
-void test("staged package.json and Cargo.toml must carry the manifest identity", () => {
+void test("package.json and Cargo.toml must carry the manifest identity", () => {
   const good = checkManifest(
     input({
       staged: ["package.json", "Cargo.toml"],
-      stagedPackageJson: JSON.stringify({
+      packageJson: JSON.stringify({
         name: "@alloy-ts/engine",
         repository: { type: "git", url: "git+https://repo.chen.software/alloy-ts/engine.git" },
       }),
-      stagedCargoToml: '[package]\nname = "alloy-engine"\n',
+      cargoToml: '[package]\nname = "alloy-engine"\n',
     }),
   );
   assert.deepEqual(good.errors, []);
   const bad = checkManifest(
     input({
       staged: ["package.json", "Cargo.toml"],
-      stagedPackageJson: JSON.stringify({
+      packageJson: JSON.stringify({
         name: "repository",
         repository: "https://repo.chen.software/yumin-chen/repository",
       }),
-      stagedCargoToml: '[package]\nname = "repository"\n',
+      cargoToml: '[package]\nname = "repository"\n',
     }),
   );
   assert.equal(bad.errors.length, 3);
@@ -194,6 +203,92 @@ void test("collectInput reads a real repository", () => {
       committerEmail: "repo@chen.software",
     });
     assert.deepEqual(result.errors, []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+const TEMPLATE_PACKAGE = JSON.stringify({
+  name: "repository",
+  repository: { type: "git", url: "git+https://repo.chen.software/yumin-chen/repository.git" },
+});
+
+void test("every name conflict reports location, expected, actual and a fix", () => {
+  const result = checkManifest(
+    input({
+      gitConfig: config({
+        "remote.origin.url": "https://u:secret@dev.azure.com/ChenSoftware/alloy-ts/_git/init",
+      }),
+      packageJson: TEMPLATE_PACKAGE,
+      cargoToml: '[package]\nname = "repository"\n',
+    }),
+  );
+  const [remote, name, repo, crate] = result.errors;
+  assert.equal(result.errors.length, 4);
+  assert.match(
+    remote!,
+    /^remote "origin" url: expected dev.azure.com\/chensoftware\/alloy-ts\/_git\/engine, actual dev.azure.com\/chensoftware\/alloy-ts\/_git\/init/,
+  );
+  assert.match(
+    remote!,
+    /fix: git remote set-url origin https:\/\/dev.azure.com\/ChenSoftware\/alloy-ts\/_git\/engine/,
+  );
+  assert.match(
+    name!,
+    /^package.json name: expected "@alloy-ts\/engine", actual "repository"[\s\S]*fix: set "name": "@alloy-ts\/engine"[\s\S]*commit --amend/,
+  );
+  assert.match(
+    repo!,
+    /^package.json repository.url: expected repo.chen.software\/alloy-ts\/engine, actual repo.chen.software\/yumin-chen\/repository/,
+  );
+  assert.match(
+    crate!,
+    /^Cargo.toml \[package\] name: expected "engine"[\s\S]*actual "repository"[\s\S]*fix: set name = "alloy-engine"/,
+  );
+  assert.match(result.hints.join(), /only change in the root commit[\s\S]*refs\/roots\/main/);
+  assert.doesNotMatch(result.errors.join(), /secret/);
+  assert.deepEqual(result.fixes, [
+    {
+      remote: "origin",
+      push: false,
+      url: "https://dev.azure.com/ChenSoftware/alloy-ts/_git/engine",
+    },
+  ]);
+});
+
+void test("a remote on a host outside the manifest has no automatic fix", () => {
+  const result = checkManifest(
+    input({ gitConfig: config({ "remote.mirror.url": "https://example.com/x/y" }) }),
+  );
+  assert.match(
+    result.errors.join(),
+    /remote "mirror" url: example.com\/x\/y is not on any host[\s\S]*git remote remove mirror/,
+  );
+  assert.deepEqual(result.fixes, []);
+});
+
+void test("a package.json conflict is reported even when it is not staged", () => {
+  const { errors } = checkManifest(input({ staged: [], packageJson: TEMPLATE_PACKAGE }));
+  assert.equal(errors.length, 2);
+});
+
+void test("applyFixes repoints origin and keeps embedded credentials", () => {
+  const dir = mkdtempSync(join(tmpdir(), "repo-sanity-fix-"));
+  try {
+    const g = (...args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+    g("init", "-q");
+    g("remote", "add", "origin", "https://u:tok@dev.azure.com/ChenSoftware/alloy-ts/_git/init");
+    applyFixes(dir, [
+      {
+        remote: "origin",
+        push: false,
+        url: "https://dev.azure.com/ChenSoftware/alloy-ts/_git/engine",
+      },
+    ]);
+    assert.equal(
+      g("config", "--local", "--get", "remote.origin.url").trim(),
+      "https://u:tok@dev.azure.com/ChenSoftware/alloy-ts/_git/engine",
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
