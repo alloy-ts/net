@@ -5,12 +5,13 @@
 //   npm run ci -- cross              # only the cross-build stage
 //   npm run ci -- cross --targets x86_64-unknown-linux-gnu,aarch64-apple-darwin
 //   npm run ci -- cross --strict     # fail instead of skipping unbuildable targets
+//   npm run ci -- smoke              # load every addon in artifacts/ this host can run
 //
 // Cross-built addons are collected flat in artifacts/ (the layout
-// `napi artifacts --output-dir artifacts` expects) and the host target is
-// smoke-tested by loading the addon.
+// `napi artifacts --output-dir artifacts` expects) and every addon the host
+// can run is smoke-tested by loading it.
 import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,7 +19,8 @@ import { parseTriple } from "@napi-rs/cli";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 // build runs first: type-aware lint needs the generated dist/index.js typings.
-const STAGES = ["build", "check", "test", "cross"] as const;
+const STAGES = ["build", "check", "test", "cross", "smoke"] as const;
+const DEFAULT_STAGES: Stage[] = ["build", "check", "test", "cross"];
 type Stage = (typeof STAGES)[number];
 
 export type CrossTool = "native" | "zigbuild" | "xwin";
@@ -78,6 +80,26 @@ export function readPackage(dir = root): { binaryName: string; targets: string[]
   };
 }
 
+// Xcode and MSVC link every architecture of their own OS, so a darwin or
+// windows-msvc host builds the other arch without a cross toolchain.
+function sameNativeToolchain(triple: string, host: string): boolean {
+  return ["-apple-darwin", "-pc-windows-msvc"].some(
+    (os) => triple.endsWith(os) && host.endsWith(os),
+  );
+}
+
+// napi platform name of the running Node, e.g. linux-x64-gnu, darwin-arm64.
+export function hostAbi(): string {
+  const { platform, arch } = process;
+  if (platform === "linux") {
+    const header = (process.report?.getReport() as { header?: { glibcVersionRuntime?: string } })
+      ?.header;
+    return `linux-${arch}-${header?.glibcVersionRuntime ? "gnu" : "musl"}`;
+  }
+  if (platform === "win32") return `win32-${arch}-msvc`;
+  return `${platform}-${arch}`;
+}
+
 // Decide how (or whether) each target can be built on this machine.
 // napi `--cross-compile` uses cargo-xwin for *-windows-msvc and
 // cargo-zigbuild for everything else.
@@ -93,7 +115,7 @@ export function planTargets(
     const abi = parseTriple(triple).platformArchABI;
     if (!installed.has(triple)) {
       skipped.push({ triple, abi, reason: `rustup target ${triple} is not installed` });
-    } else if (triple === host) {
+    } else if (triple === host || sameNativeToolchain(triple, host)) {
       plans.push({ triple, abi, tool: "native" });
     } else if (triple.endsWith("-windows-msvc")) {
       if (tools.xwin) plans.push({ triple, abi, tool: "xwin" });
@@ -107,14 +129,26 @@ export function planTargets(
   return { plans, skipped };
 }
 
-// Load a freshly built addon and call into it. Only possible for the host ABI.
-function smoke(file: string): void {
+// Load every addon in `dir` that this Node can run and call into it; addons
+// for other platforms are listed as skipped.
+export function smoke(dir: string, binaryName: string): number {
   const require = createRequire(import.meta.url);
-  const binding = require(file) as { add?: (a: number, b: number) => number };
-  if (typeof binding.add !== "function" || binding.add(1, 2) !== 3) {
-    throw new Error(`smoke test failed for ${file}`);
+  const abi = hostAbi();
+  const files = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".node")) : [];
+  let loaded = 0;
+  for (const f of files) {
+    if (f !== `${binaryName}.${abi}.node`) {
+      console.log(`[ci] smoke skip: ${f} (host is ${abi})`);
+      continue;
+    }
+    const binding = require(join(dir, f)) as { add?: (a: number, b: number) => number };
+    if (typeof binding.add !== "function" || binding.add(1, 2) !== 3) {
+      throw new Error(`smoke test failed for ${f}`);
+    }
+    console.log(`[ci] smoke ok: ${f} add(1, 2) === 3`);
+    loaded++;
   }
-  console.log(`[ci] smoke ok: ${file} add(1, 2) === 3`);
+  return loaded;
 }
 
 function cross(opts: { targets?: string[]; strict: boolean; outDir: string }): void {
@@ -147,9 +181,9 @@ function cross(opts: { targets?: string[]; strict: boolean; outDir: string }): v
     if (!existsSync(from)) throw new Error(`napi build did not produce ${from}`);
     const to = join(opts.outDir, name);
     copyFileSync(from, to);
-    if (p.triple === host) smoke(to);
     built.push(`${p.triple} (${p.tool})`);
   }
+  smoke(opts.outDir, pkg.binaryName);
   console.log(`\n[ci] built ${built.length}/${wanted.length} target(s) into ${opts.outDir}`);
   for (const b of built) console.log(`[ci]   ✔ ${b}`);
   for (const s of skipped) console.log(`[ci]   ✖ ${s.triple}: ${s.reason}`);
@@ -173,7 +207,7 @@ function parseArgs(argv: string[]): {
     else if ((STAGES as readonly string[]).includes(a)) stages.push(a as Stage);
     else throw new Error(`unknown argument: ${a} (stages: ${STAGES.join(", ")})`);
   }
-  return { stages: stages.length > 0 ? stages : [...STAGES], targets, strict, outDir };
+  return { stages: stages.length > 0 ? stages : DEFAULT_STAGES, targets, strict, outDir };
 }
 
 export function main(argv: string[]): void {
@@ -183,7 +217,10 @@ export function main(argv: string[]): void {
     if (stage === "check") sh("npm", ["run", "check"]);
     else if (stage === "build") sh("npm", ["run", "build"]);
     else if (stage === "test") sh("npm", ["test"]);
-    else cross(opts);
+    else if (stage === "cross") cross(opts);
+    else if (smoke(opts.outDir, readPackage().binaryName) === 0) {
+      throw new Error(`no addon in ${opts.outDir} can be loaded on ${hostAbi()}`);
+    }
   }
 }
 

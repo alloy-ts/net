@@ -46,3 +46,14 @@ void test("planTargets skips targets without a rustup target or cross tool", () 
     ],
   );
 });
+
+void test("planTargets builds the other arch natively on darwin and windows-msvc hosts", () => {
+  const targets = ["aarch64-apple-darwin", "aarch64-pc-windows-msvc"];
+  const none = { zigbuild: false, xwin: false };
+  const mac = planTargets(targets.slice(0, 1), "x86_64-apple-darwin", new Set(targets), none);
+  const win = planTargets(targets.slice(1), "x86_64-pc-windows-msvc", new Set(targets), none);
+  assert.deepEqual(
+    [...mac.plans, ...win.plans].map((p) => p.tool),
+    ["native", "native"],
+  );
+});
