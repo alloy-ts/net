@@ -29,7 +29,6 @@
     "lint": "vp lint && cargo clippy --all-targets",
     "fix": "vp fmt && cargo clippy --fix --all-targets --allow-dirty --allow-staged && vp check --fix",
     "prepublishOnly": "npm run build",
-    "install": "npm run build",
     "prepare": "node --import @oxc-node/core/register scripts/setup.ts",
     "repo:sanity": "node --import @oxc-node/core/register scripts/repo-sanity.ts"
   },
