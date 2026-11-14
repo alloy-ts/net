@@ -2,14 +2,15 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { checkManifest, collectInput, type CheckOptions } from "./repo-sanity.ts";
 
-const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const defaultRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 type ConfigEntry = { key: string; value: string };
 
 const MANIFEST_CANDIDATES = ["repo.manifest.yml", "repository.manifest.yml"];
 
-function readManifest(): { name: string; text: string } {
+function readManifest(root: string): { name: string; text: string } {
   for (const name of MANIFEST_CANDIDATES) {
     const path = join(root, name);
     if (existsSync(path)) {
@@ -55,11 +56,11 @@ function parseManifestConfig(text: string): ConfigEntry[] {
   return entries;
 }
 
-function git(args: string[]): void {
+function git(root: string, args: string[]): void {
   execFileSync("git", args, { cwd: root, stdio: "inherit" });
 }
 
-function vp(args: string[]): void {
+function vp(root: string, args: string[]): void {
   // Prefer the locally-installed CLI; fall back to npx when it is not on PATH
   // (e.g. when setup.ts is run directly rather than via an npm script).
   const localBin = join(root, "node_modules", ".bin", "vp");
@@ -73,12 +74,31 @@ function vp(args: string[]): void {
   }
 }
 
-function main(): void {
-  const manifest = readManifest();
+// Run scripts/repo-sanity.ts checks; print warnings and throw on errors.
+function sanity(root: string, stage: string, options: CheckOptions = {}): void {
+  const { errors, warnings } = checkManifest(collectInput(root), options);
+  for (const w of warnings) console.warn(`[setup] ${stage} warning: ${w}`);
+  if (errors.length > 0) {
+    throw new Error(
+      `${stage} failed:\n${errors.map((e) => `  - ${e}`).join("\n")}` +
+        (stage === "pre-flight" ? "\nnothing was written to .git/config" : ""),
+    );
+  }
+}
+
+export function setup(root: string): void {
+  const manifest = readManifest(root);
   const entries = parseManifestConfig(manifest.text);
   if (entries.length === 0) {
     throw new Error(`${manifest.name}: no \`config:\` entries found`);
   }
+
+  // Pre-flight: refuse to touch .git/config unless the manifest is valid and
+  // the repository already agrees with it on everything setup does not write
+  // (remotes, protected files, package identity). The config values are
+  // skipped here because applying them is what setup is for.
+  console.log("[setup] pre-flight repo sanity check");
+  sanity(root, "pre-flight", { skipConfigValues: true });
 
   const hooksPathEntry = entries.find((e) => e.key === "core.hooksPath");
   const hooksDir = hooksPathEntry ? dirname(hooksPathEntry.value) : join("scripts", "hooks");
@@ -87,27 +107,21 @@ function main(): void {
   // vp always (re)generates the dispatcher instead of short-circuiting because
   // the path is "already set".
   try {
-    git(["config", "--local", "--unset", "core.hooksPath"]);
+    git(root, ["config", "--local", "--unset", "core.hooksPath"]);
   } catch {
     // Not set yet — that's fine.
   }
   console.log(`[setup] vp config --hooks-dir ${hooksDir}`);
-  vp(["config", "--hooks-dir", hooksDir, "--hooks"]);
+  vp(root, ["config", "--hooks-dir", hooksDir, "--hooks"]);
 
   // Apply every manifest `config:` entry as a local git config value.
   for (const { key, value } of entries) {
     console.log(`[setup] git config --local ${key} ${value}`);
-    git(["config", "--local", key, value]);
+    git(root, ["config", "--local", key, value]);
   }
 
-  // Check the result against the manifest once at setup. Report only, so a
-  // fresh clone still installs; the pre-commit hook enforces it.
-  console.log("[setup] scripts/repo-sanity.ts --report");
-  execFileSync(
-    process.execPath,
-    ["--import", "@oxc-node/core/register", join(root, "scripts", "repo-sanity.ts"), "--report"],
-    { cwd: root, stdio: "inherit" },
-  );
+  // Verify the applied config against the manifest.
+  sanity(root, "verify");
 
   console.log("[setup] repository setup complete");
 }
@@ -115,4 +129,11 @@ function main(): void {
 export { parseManifestConfig };
 
 // Run only when executed directly (the prepare hook), not when imported.
-if (process.argv[1] === fileURLToPath(import.meta.url)) main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    setup(defaultRoot);
+  } catch (err) {
+    console.error(`[setup] ${err instanceof Error ? err.message : String(err)}`);
+    process.exitCode = 1;
+  }
+}
