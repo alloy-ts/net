@@ -5,14 +5,30 @@ edition = "2024"
 
 [lib]
 name = "alloy_net"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "lib"]
 
 [dependencies]
-napi = { version = "3.14.2", features = ["serde-json"] }
-napi-derive = "3.6.12"
+napi = { version = "=3.16.2", features = ["serde-json", "tokio_rt", "napi6", "web_stream"] }
+napi-derive = "=3.7.0"
 futures = "0.3.34"
 serde = { version = "1.0.154", features = ["derive"] }
 serde_json = "1.0.154"
+regex = "1"
+base64 = "0.22"
+rustls-native-certs = "0.8"
+url = "2.5"
+http-request = { path = "vendor/http-request" }
+rocket = "0.5.2"
+tokio = { version = "1", features = [
+  "macros",
+  "rt",
+  "rt-multi-thread",
+  "time",
+  "io-util",
+  "sync",
+  "fs",
+  "net",
+] }
 
 [build-dependencies]
 napi-build = "2.6.0"

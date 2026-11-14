@@ -1,12 +1,13 @@
 {
   "name": "@alloy-ts/net",
   "version": "0.0.0",
-  "description": "Versioned repository for yumin-chen projects.",
+  "description": "Hono-style HTTP server for alloy-ts, implemented in Rust on Rocket over N-API.",
   "keywords": [
-    "git",
-    "repository",
-    "scm",
-    "version-control"
+    "hono",
+    "http",
+    "napi",
+    "rocket",
+    "server"
   ],
   "license": "Unlicense",
   "author": "Yumin Chen",
@@ -28,8 +29,8 @@
   "scripts": {
     "build": "node --import @oxc-node/core/register build.ts && vp pack",
     "dev": "vp pack --watch",
-    "start": "vp run dist/index.js",
-    "test": "node --import @oxc-node/core/register --test 'src/**/*.test.ts' 'scripts/**/*.test.ts' && cargo test",
+    "start": "node --import @oxc-node/core/register examples/server.ts",
+    "test": "node --import @oxc-node/core/register --test 'scripts/**/*.test.ts' && vp test --run --maxWorkers=1 && cargo test",
     "check": "vp check && cargo check --all-targets",
     "fmt": "vp fmt && cargo fmt",
     "lint": "vp lint && cargo clippy --all-targets",
@@ -74,5 +75,8 @@
       "version": "11.11.0",
       "onFail": "warn"
     }
+  },
+  "inlinedDependencies": {
+    "undici-types": "8.9.0"
   }
 }
