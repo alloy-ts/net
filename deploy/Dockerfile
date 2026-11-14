@@ -1,5 +1,6 @@
 # Multi-stage image for @alloy-ts/net.
-# Build stage: Node 24, npm 11.11.0, and stable Rust for the napi addon.
+# Build stage: Node 24, npm 11.11.0, and the Rust toolchain pinned in
+# rust-toolchain.toml for the napi addon.
 # Runtime: slim Node 24, packed dist, and deploy/server.mjs.
 # sqlite headers are not required for this crate.
 
@@ -9,10 +10,14 @@ RUN npm install -g npm@11.11.0
 
 # node:24-bookworm already includes curl, ca-certificates, gcc/g++, make, and pkg-config.
 RUN curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --default-toolchain stable --profile minimal
+    | sh -s -- -y --default-toolchain none --profile minimal
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /src
+
+# Install the pinned toolchain before the crate sources so this layer stays cached.
+COPY rust-toolchain.toml ./
+RUN rustup show
 
 # Conservative default for colima's small VM; override with --build-arg.
 ARG CARGO_BUILD_JOBS=2
