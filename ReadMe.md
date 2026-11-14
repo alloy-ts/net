@@ -9,7 +9,7 @@ Starter Template for Rust + TypeScript via NAPI-RS, Node-API (N-API) bindings.
 3. Run the application
 
 ```bash
-git clone https://repo.chen.software/yumin-chen/repository.git
+git clone https://repo.chen.software/alloy-ts/net
 cd starter-template
 npm install
 npm run start

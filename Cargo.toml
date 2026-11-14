@@ -1,9 +1,10 @@
 [package]
-name = "repository"
+name = "alloy-net"
 version = "0.0.0"
 edition = "2024"
 
 [lib]
+name = "alloy_net"
 crate-type = ["cdylib"]
 
 [dependencies]

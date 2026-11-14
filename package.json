@@ -1,5 +1,5 @@
 {
-  "name": "repository",
+  "name": "@alloy-ts/net",
   "version": "0.0.0",
   "description": "Versioned repository for yumin-chen projects.",
   "keywords": [
@@ -12,7 +12,7 @@
   "author": "Yumin Chen",
   "repository": {
     "type": "git",
-    "url": "git+https://repo.chen.software/yumin-chen/repository.git"
+    "url": "git+https://repo.chen.software/alloy-ts/net.git"
   },
   "files": [
     "dist/index.js",
@@ -56,7 +56,7 @@
     "vite": "npm:@voidzero-dev/vite-plus-core@1.6.0"
   },
   "napi": {
-    "binaryName": "repository",
+    "binaryName": "alloy-net",
     "targets": [
       "x86_64-unknown-linux-gnu",
       "aarch64-unknown-linux-gnu",

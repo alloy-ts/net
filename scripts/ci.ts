@@ -141,11 +141,12 @@ export function smoke(dir: string, binaryName: string): number {
       console.log(`[ci] smoke skip: ${f} (host is ${abi})`);
       continue;
     }
-    const binding = require(join(dir, f)) as { add?: (a: number, b: number) => number };
-    if (typeof binding.add !== "function" || binding.add(1, 2) !== 3) {
-      throw new Error(`smoke test failed for ${f}`);
-    }
-    console.log(`[ci] smoke ok: ${f} add(1, 2) === 3`);
+    // Module-agnostic: the addon must load and register at least one export.
+    // Behaviour is covered by `npm test`; this only proves the binary links.
+    const binding = require(join(dir, f)) as Record<string, unknown>;
+    const exported = Object.keys(binding);
+    if (exported.length === 0) throw new Error(`smoke test failed: ${f} exports nothing`);
+    console.log(`[ci] smoke ok: ${f} loads (${exported.join(", ")})`);
     loaded++;
   }
   return loaded;
