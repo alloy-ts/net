@@ -14,7 +14,7 @@ services:
     image: alloy-ts-net:local
     restart: unless-stopped
     ports:
-      - "${PORT:-3000}:${PORT:-3000}"
+      - "127.0.0.1:${PORT:-3000}:${PORT:-3000}"
     env_file:
       - path: ../.env
         required: false
