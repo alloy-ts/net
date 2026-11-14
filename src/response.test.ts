@@ -337,3 +337,115 @@ describe("Native NAPI Response class", () => {
     expect(customType.headers["content-type"]).toBe("application/problem+json");
   });
 });
+
+// MDN Response interface pins: https://developer.mozilla.org/en-US/docs/Web/API/Response
+// These assertions lock the native NAPI class to the documented surface so a
+// refactor cannot silently drift from the spec.
+describe("MDN Response conformance — native NAPI class", () => {
+  test("instance properties expose the MDN Response interface", () => {
+    const res = new native.Response("hello", { status: 201, statusText: "Created" });
+    expect(res.body).toBeInstanceOf(ReadableStream);
+    expect(res.bodyUsed).toBe(false);
+    expect(res.headers).toEqual({ "content-type": "text/plain;charset=UTF-8" });
+    expect(res.ok).toBe(true);
+    expect(res.redirected).toBe(false);
+    expect(res.status).toBe(201);
+    expect(res.statusText).toBe("Created");
+    expect(res.type).toBe("default");
+    expect(res.url).toBe("");
+  });
+
+  test("ok is true for 200..299 and false otherwise", () => {
+    expect(new native.Response(null, { status: 200 }).ok).toBe(true);
+    expect(new native.Response(null, { status: 299 }).ok).toBe(true);
+    expect(new native.Response(null, { status: 300 }).ok).toBe(false);
+    expect(new native.Response(null, { status: 404 }).ok).toBe(false);
+    expect(native.Response.error().ok).toBe(false);
+  });
+
+  test("type is 'default' for constructed responses and 'error' for error()", () => {
+    expect(new native.Response().type).toBe("default");
+    expect(native.Response.error().type).toBe("error");
+    expect(native.Response.redirect("https://example.test", 302).type).toBe("default");
+  });
+
+  test("statusText validates to HTTP token/obsolete-text bytes", () => {
+    expect(new native.Response(null, { status: 200, statusText: "OK" }).statusText).toBe("OK");
+    // bytes >= 0x80 (UTF-8 'é' = 0xc3 0xa9) are allowed
+    expect(new native.Response(null, { status: 200, statusText: "café" }).statusText).toBe("café");
+    // control characters (0x00, 0x0a, 0x7f) are rejected
+    expect(() => new native.Response(null, { status: 200, statusText: "bad\n" })).toThrow();
+    expect(() => new native.Response(null, { status: 200, statusText: "bad\x00" })).toThrow();
+    expect(() => new native.Response(null, { status: 200, statusText: "bad\x7f" })).toThrow();
+  });
+
+  test("null-body statuses reject a body but accept none", () => {
+    expect(() => new native.Response("x", { status: 204 })).toThrow();
+    expect(() => new native.Response("x", { status: 205 })).toThrow();
+    expect(() => new native.Response("x", { status: 304 })).toThrow();
+    expect(new native.Response(null, { status: 204 }).status).toBe(204);
+    expect(new native.Response(null, { status: 205 }).status).toBe(205);
+    expect(new native.Response(null, { status: 304 }).status).toBe(304);
+  });
+
+  test("status is constrained to the 200..599 range", () => {
+    expect(() => new native.Response(null, { status: 199 })).toThrow();
+    expect(() => new native.Response(null, { status: 600 })).toThrow();
+    expect(new native.Response(null, { status: 200 }).status).toBe(200);
+    expect(new native.Response(null, { status: 599 }).status).toBe(599);
+  });
+
+  test("bytes() returns a Uint8Array view and disturbs the body", async () => {
+    const res = new native.Response(Buffer.from([1, 2, 3, 4]), { status: 202 });
+    const b = await res.bytes();
+    expect(b).toBeInstanceOf(Uint8Array);
+    expect(Array.from(b)).toEqual([1, 2, 3, 4]);
+    expect(res.bodyUsed).toBe(true);
+    await expect(res.bytes()).rejects.toThrow();
+  });
+
+  test("Response.error() is a network-error response", () => {
+    const res = native.Response.error();
+    expect(res.status).toBe(0);
+    expect(res.statusText).toBe("");
+    expect(res.type).toBe("error");
+    expect(res.ok).toBe(false);
+    expect(res.body).toBeNull();
+    expect(res.bodyUsed).toBe(false);
+  });
+
+  test("clone() copies metadata and remains independent", async () => {
+    const res = new native.Response("payload", {
+      status: 201,
+      statusText: "Created",
+      headers: { "x-meta": "v" },
+    });
+    const copy = res.clone();
+    expect(copy.status).toBe(201);
+    expect(copy.statusText).toBe("Created");
+    expect(copy.type).toBe("default");
+    expect(copy.redirected).toBe(false);
+    expect(copy.url).toBe("");
+    expect(copy.headers["x-meta"]).toBe("v");
+    expect(copy.bodyUsed).toBe(false);
+
+    expect(await res.text()).toBe("payload");
+    expect(res.bodyUsed).toBe(true);
+    expect(await copy.text()).toBe("payload");
+    // original body is now consumed
+    expect(() => res.clone()).toThrow();
+  });
+
+  test("body ReadableStream disturbs bodyUsed and locks clone", async () => {
+    const res = new native.Response("stream-me");
+    const stream = res.body;
+    expect(stream).toBeInstanceOf(ReadableStream);
+    expect(res.bodyUsed).toBe(false);
+    const reader = stream!.getReader();
+    const { value, done } = await reader.read();
+    expect(done).toBe(false);
+    expect(Buffer.from(value as Uint8Array).toString()).toBe("stream-me");
+    expect(res.bodyUsed).toBe(true);
+    expect(() => res.clone()).toThrow();
+  });
+});

@@ -1,8 +1,40 @@
 //! Web Fetch API compatible `Response` implementation.
 //!
-//! Native buffered response objects.
-//! See https://developer.mozilla.org/en-US/docs/Web/API/Response and
-//! https://fetch.spec.whatwg.org/#response-class
+//! Native buffered response objects. The public Web-compatible facade is `response.ts`.
+//! See <https://developer.mozilla.org/en-US/docs/Web/API/Response> and
+//! <https://fetch.spec.whatwg.org/#response-class>.
+//!
+//! # MDN `Response` conformance
+//!
+//! This NAPI class implements the documented `Response` surface:
+//!
+//! | Member | Status |
+//! |--------|--------|
+//! | `body: ReadableStream<Buffer> \| null` | ✅ getter; `null` when there is no body |
+//! | `bodyUsed: boolean` | ✅ true only once a body consumer has run |
+//! | `headers: Record<string,string>` | ⚠️ plain record (keys lower-cased); the TS facade wraps it in a `Headers` object |
+//! | `ok: boolean` | ✅ `200 <= status < 300` |
+//! | `redirected: boolean` | ✅ |
+//! | `status: number` | ✅ |
+//! | `statusText: string` | ✅ validated against HTTP token / obsolete-text bytes |
+//! | `type: "default" \| "basic" \| "error"` | ✅ `default` (constructed), `basic` (fetched), `error` (`Response.error()`) |
+//! | `url: string` | ✅ populated for fetched responses |
+//! | `arrayBuffer()` / `bytes()` / `blob()` / `text()` / `json()` | ✅ `Body` mixin |
+//! | `formData()` | ✅ urlencoded + multipart |
+//! | `clone()` | ✅ throws `TypeError` once the body is consumed |
+//! | `Response.error()` / `Response.json()` / `Response.redirect()` | ✅ static factories |
+//! | `constructor(body?, init?)` | ✅ validates status `200..=599` and null-body statuses `101/103/204/205/304` |
+//!
+//! ## Known limitations (native binding level)
+//!
+//! * `headers` is returned as a plain `Record` rather than a `Headers` instance;
+//!   callers that need a `Headers` object use the `response.ts` facade instead.
+//! * The constructor accepts `string | Buffer` bodies only (not `Blob`,
+//!   `FormData`, `URLSearchParams`, or `ReadableStream`); those are handled by the
+//!   JS facade. `ResponseInit.headers` accepts a record only.
+//! * `body` yields a fresh `ReadableStream` per access (so `response.body ===
+//!   response.body` is `false`); the shared `bodyUsed` flag still reflects
+//!   consumption across every accessor, so `clone()` throws after any read.
 
 use napi::Status;
 use napi::bindgen_prelude::*;
