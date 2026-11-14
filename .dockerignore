@@ -1,0 +1,17 @@
+# Keep the build context small and out of credentials.
+.git
+.gitignore
+**/.env
+**/.env.*
+!**/.env.example
+
+node_modules
+target
+dist
+artifacts
+npm
+.publish
+.vitest
+
+**/*.log
+scripts/hooks/_
