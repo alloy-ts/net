@@ -16,7 +16,7 @@ CI `bindings-linux-arm64-gnu` artifact instead of compiling in the VM.
 
 ## Prerequisites
 
-- Docker Engine with Compose v2
+- Docker Engine with Compose v2.24 or later (`env_file` path/required and overlay `!reset`)
 - From the repository root, a `.env` file (see below)
 - npm 11.11.0 is used only inside the build image; you do not need it on the host
 
@@ -51,11 +51,11 @@ curl -sS "http://127.0.0.1:${PORT:-3000}/ping"
 
 The published port is bound to `127.0.0.1` on the host so it is not
 reachable on the LAN. `HOST` inside the container must stay `0.0.0.0` so
-the published port can reach the process. Change `PORT` in `.env` if 3000 is already taken; pass
-`--env-file .env` from the repository root so the compose port mapping and
-the container see the same value. A service `environment:` block would
-override `env_file`, so `HOST` and `PORT` are not set there. Image `ENV`
-defaults apply when `.env` omits them.
+the published port can reach the process. Change `PORT` in `.env` if 3000
+is already taken; pass `--env-file .env` from the repository root so the
+compose port mapping and the container see the same value. A service
+`environment:` block would override `env_file`, so `HOST` and `PORT` are
+not set there. Image `ENV` defaults apply when `.env` omits them.
 
 The service uses `restart: unless-stopped`. A crash or a `docker kill`
 starts a new container; `docker compose stop` or `down` does not.
