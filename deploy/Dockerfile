@@ -13,6 +13,11 @@ RUN curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs \
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /src
+
+# Conservative default for colima's small VM; override with --build-arg.
+ARG CARGO_BUILD_JOBS=2
+ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
+
 COPY package.json package-lock.json ./
 # setup.ts is for a git checkout, not an image build
 RUN npm ci --ignore-scripts

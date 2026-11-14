@@ -8,7 +8,11 @@ listens for `GET /health` and `GET /ping`, honours `HOST` and `PORT`, and
 stops Rocket on `SIGTERM` or `SIGINT`. The demo in `examples/server.ts` has
 the same hooks, and still defaults `HOST` to `127.0.0.1` for a local process.
 
-The image is Linux x64 (glibc). There is no sqlite dependency.
+The image is Linux (glibc). On an x86-64 host that is `linux/amd64`; on
+the Mac mini in colima it is `linux/arm64` (a native VM, not an x64
+emulation). There is no sqlite dependency. A release build is heavy in a
+3 GB colima VM; set `CARGO_BUILD_JOBS=2` (the image default) or reuse the
+CI `bindings-linux-arm64-gnu` artifact instead of compiling in the VM.
 
 ## Prerequisites
 
@@ -22,14 +26,19 @@ From the repository root:
 
 ```sh
 cp -n .env.example .env
-docker compose -f deploy/compose.yml --env-file .env build
+CARGO_BUILD_JOBS=2 docker compose -f deploy/compose.yml --env-file .env build
 ```
 
 Or build the image directly:
 
 ```sh
-docker build -f deploy/Dockerfile -t alloy-ts-net:local .
+docker build -f deploy/Dockerfile --build-arg CARGO_BUILD_JOBS=2 -t alloy-ts-net:local .
 ```
+
+To skip the in-VM compile on the Mac mini, download the pipeline artifact
+`bindings-linux-arm64-gnu`, copy the `*.linux-arm64-gnu.node` addon into
+`dist/`, pack, and use that tree as the runtime image context instead of
+`--build`.
 
 ## Run
 
@@ -40,8 +49,9 @@ curl -sS "http://127.0.0.1:${PORT:-3000}/health"
 curl -sS "http://127.0.0.1:${PORT:-3000}/ping"
 ```
 
-`HOST` inside the container must stay `0.0.0.0` so the published port can
-reach the process. Change `PORT` in `.env` if 3000 is already taken; pass
+The published port is bound to `127.0.0.1` on the host so it is not
+reachable on the LAN. `HOST` inside the container must stay `0.0.0.0` so
+the published port can reach the process. Change `PORT` in `.env` if 3000 is already taken; pass
 `--env-file .env` from the repository root so the compose port mapping and
 the container see the same value. A service `environment:` block would
 override `env_file`, so `HOST` and `PORT` are not set there. Image `ENV`
@@ -54,7 +64,7 @@ starts a new container; `docker compose stop` or `down` does not.
 
 ```sh
 git pull
-docker compose -f deploy/compose.yml --env-file .env build
+CARGO_BUILD_JOBS=2 docker compose -f deploy/compose.yml --env-file .env build
 docker compose -f deploy/compose.yml --env-file .env up -d
 ```
 
