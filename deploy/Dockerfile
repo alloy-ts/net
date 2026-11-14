@@ -7,10 +7,7 @@ FROM node:24-bookworm AS build
 
 RUN npm install -g npm@11.11.0
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates build-essential pkg-config \
-    && rm -rf /var/lib/apt/lists/*
-
+# node:24-bookworm already includes curl, ca-certificates, gcc/g++, make, and pkg-config.
 RUN curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs \
     | sh -s -- -y --default-toolchain stable --profile minimal
 ENV PATH="/root/.cargo/bin:${PATH}"
