@@ -15,3 +15,12 @@ npm
 
 **/*.log
 scripts/hooks/_
+
+# Auth keys and overlay files must not enter the build context or cache.
+**/secrets/
+deploy/config/
+*.key
+!src/fixtures/**/*.key
+.azure
+.vscode
+

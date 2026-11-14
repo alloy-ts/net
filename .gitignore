@@ -17,3 +17,7 @@ npm/
 
 # Local compose environment (keep .env.example)
 .env
+
+# Tailscale overlay auth key and related files (see deploy/RUNBOOK.md)
+deploy/secrets/
+
