@@ -413,9 +413,11 @@ impl Response {
 }
 
 /// One-shot stream over a buffered body. Reading it marks the response disturbed.
-struct BodyStream {
-    flag: Arc<AtomicBool>,
-    data: Option<Vec<u8>>,
+///
+/// Shared with `request.rs` so both body mixins observe the same consumption flag.
+pub(crate) struct BodyStream {
+    pub(crate) flag: Arc<AtomicBool>,
+    pub(crate) data: Option<Vec<u8>>,
 }
 
 impl futures::Stream for BodyStream {
@@ -438,7 +440,8 @@ impl futures::Stream for BodyStream {
     }
 }
 
-const FORM_DATA_FACTORY: &str = r#"(function (payload) {
+/// Builds a platform `FormData` from JSON-encoded entries. Shared with `request.rs`.
+pub(crate) const FORM_DATA_FACTORY: &str = r#"(function (payload) {
   const entries = JSON.parse(payload);
   const form = new FormData();
   for (const entry of entries) {
@@ -455,7 +458,7 @@ const FORM_DATA_FACTORY: &str = r#"(function (payload) {
   return Promise.resolve(form);
 })"#;
 
-fn mime_essence(content_type: &str) -> String {
+pub(crate) fn mime_essence(content_type: &str) -> String {
     content_type
         .split(';')
         .next()
@@ -464,14 +467,16 @@ fn mime_essence(content_type: &str) -> String {
         .to_ascii_lowercase()
 }
 
-fn parse_form_entries(
+/// Parse a urlencoded or multipart body. Shared by the `Response` and `Request`
+/// body mixins so both follow exactly the same rules.
+pub(crate) fn parse_form_entries(
     content_type: Option<&str>,
     bytes: &[u8],
 ) -> napi::Result<Vec<serde_json::Value>> {
     let Some(content_type) = content_type else {
         return Err(napi::Error::new(
             Status::InvalidArg,
-            "TypeError: response formData requires a form content type",
+            "TypeError: formData requires a form content type",
         ));
     };
     let mime = mime_essence(content_type);
@@ -493,7 +498,7 @@ fn parse_form_entries(
     }
     Err(napi::Error::new(
         Status::InvalidArg,
-        "TypeError: response formData content type must be urlencoded or multipart",
+        "TypeError: formData content type must be urlencoded or multipart",
     ))
 }
 
