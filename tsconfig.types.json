@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "emitDeclarationOnly": false
+  },
+  "include": [
+    "src/server-types.test.ts",
+    "src/main.ts",
+    "src/request.ts",
+    "src/response.ts",
+    "src/fs/file.ts"
+  ],
+  "exclude": ["examples", "node_modules"]
+}

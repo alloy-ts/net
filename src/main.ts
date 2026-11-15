@@ -1,19 +1,4 @@
 export * from "../dist/index.js";
-// Explicit export shadows the `Server` emitted by NAPI-RS with the typed facade;
-// the runtime value is the same native constructor.
-export {
-  Server,
-  type Context,
-  type ContextRequest,
-  type Env,
-  type ErrorHandler,
-  type Handler,
-  type Next,
-  type NotFoundHandler,
-  type RouterInstance,
-  type ServerConstructor,
-  type ServerOptions,
-} from "./server.ts";
 export { Request, Headers, fetch } from "./request.ts";
 export type { RequestOpts, RequestInit } from "./request.ts";
 export { Response } from "./response.ts";

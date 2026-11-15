@@ -340,7 +340,10 @@ impl Server {
         self.view.inner.listening.load(Ordering::SeqCst)
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "path: string, handler: (c: { req: { param(name: string): string | undefined; param(): Record<string, string>; query(name: string): string | undefined; query(): Record<string, string>; header(name: string): string | undefined; header(): Record<string, string>; method: string; url: string; path: string; raw: globalThis.Request; text(): Promise<string>; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; blob(): Promise<Blob>; formData(): Promise<FormData> }; env: Record<string, unknown>; executionCtx: unknown; finalized: boolean; text(body: string, status?: number): globalThis.Response; json(value: unknown, status?: number): globalThis.Response; html(body: string, status?: number): globalThis.Response; body(data: string, status?: number, headers?: Record<string, string>): globalThis.Response; redirect(url: string, status?: number): globalThis.Response; status(code: number): typeof c; header(name: string, value: string, options?: { append?: boolean }): typeof c; set(key: string, value: unknown): void; get(key: string): unknown; notFound(): globalThis.Response; res(): globalThis.Response }, next: () => Promise<void>) => globalThis.Response | Promise<globalThis.Response> | void | Promise<void>, extra?: typeof handler",
+        ts_return_type = "Server"
+    )]
     pub fn get(
         &self,
         env: Env,
@@ -351,7 +354,10 @@ impl Server {
         self.register(&env, "GET", first, second, third)
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "path: string, handler: (c: { req: { param(name: string): string | undefined; param(): Record<string, string>; query(name: string): string | undefined; query(): Record<string, string>; header(name: string): string | undefined; header(): Record<string, string>; method: string; url: string; path: string; raw: globalThis.Request; text(): Promise<string>; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; blob(): Promise<Blob>; formData(): Promise<FormData> }; env: Record<string, unknown>; executionCtx: unknown; finalized: boolean; text(body: string, status?: number): globalThis.Response; json(value: unknown, status?: number): globalThis.Response; html(body: string, status?: number): globalThis.Response; body(data: string, status?: number, headers?: Record<string, string>): globalThis.Response; redirect(url: string, status?: number): globalThis.Response; status(code: number): typeof c; header(name: string, value: string, options?: { append?: boolean }): typeof c; set(key: string, value: unknown): void; get(key: string): unknown; notFound(): globalThis.Response; res(): globalThis.Response }, next: () => Promise<void>) => globalThis.Response | Promise<globalThis.Response> | void | Promise<void>, extra?: typeof handler",
+        ts_return_type = "Server"
+    )]
     pub fn post(
         &self,
         env: Env,
@@ -362,7 +368,10 @@ impl Server {
         self.register(&env, "POST", first, second, third)
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "path: string, handler: (c: { req: { param(name: string): string | undefined; param(): Record<string, string>; query(name: string): string | undefined; query(): Record<string, string>; header(name: string): string | undefined; header(): Record<string, string>; method: string; url: string; path: string; raw: globalThis.Request; text(): Promise<string>; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; blob(): Promise<Blob>; formData(): Promise<FormData> }; env: Record<string, unknown>; executionCtx: unknown; finalized: boolean; text(body: string, status?: number): globalThis.Response; json(value: unknown, status?: number): globalThis.Response; html(body: string, status?: number): globalThis.Response; body(data: string, status?: number, headers?: Record<string, string>): globalThis.Response; redirect(url: string, status?: number): globalThis.Response; status(code: number): typeof c; header(name: string, value: string, options?: { append?: boolean }): typeof c; set(key: string, value: unknown): void; get(key: string): unknown; notFound(): globalThis.Response; res(): globalThis.Response }, next: () => Promise<void>) => globalThis.Response | Promise<globalThis.Response> | void | Promise<void>, extra?: typeof handler",
+        ts_return_type = "Server"
+    )]
     pub fn put(
         &self,
         env: Env,
@@ -373,7 +382,10 @@ impl Server {
         self.register(&env, "PUT", first, second, third)
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "path: string, handler: (c: { req: { param(name: string): string | undefined; param(): Record<string, string>; query(name: string): string | undefined; query(): Record<string, string>; header(name: string): string | undefined; header(): Record<string, string>; method: string; url: string; path: string; raw: globalThis.Request; text(): Promise<string>; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; blob(): Promise<Blob>; formData(): Promise<FormData> }; env: Record<string, unknown>; executionCtx: unknown; finalized: boolean; text(body: string, status?: number): globalThis.Response; json(value: unknown, status?: number): globalThis.Response; html(body: string, status?: number): globalThis.Response; body(data: string, status?: number, headers?: Record<string, string>): globalThis.Response; redirect(url: string, status?: number): globalThis.Response; status(code: number): typeof c; header(name: string, value: string, options?: { append?: boolean }): typeof c; set(key: string, value: unknown): void; get(key: string): unknown; notFound(): globalThis.Response; res(): globalThis.Response }, next: () => Promise<void>) => globalThis.Response | Promise<globalThis.Response> | void | Promise<void>, extra?: typeof handler",
+        ts_return_type = "Server"
+    )]
     pub fn delete(
         &self,
         env: Env,
@@ -384,7 +396,10 @@ impl Server {
         self.register(&env, "DELETE", first, second, third)
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "path: string, handler: (c: { req: { param(name: string): string | undefined; param(): Record<string, string>; query(name: string): string | undefined; query(): Record<string, string>; header(name: string): string | undefined; header(): Record<string, string>; method: string; url: string; path: string; raw: globalThis.Request; text(): Promise<string>; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; blob(): Promise<Blob>; formData(): Promise<FormData> }; env: Record<string, unknown>; executionCtx: unknown; finalized: boolean; text(body: string, status?: number): globalThis.Response; json(value: unknown, status?: number): globalThis.Response; html(body: string, status?: number): globalThis.Response; body(data: string, status?: number, headers?: Record<string, string>): globalThis.Response; redirect(url: string, status?: number): globalThis.Response; status(code: number): typeof c; header(name: string, value: string, options?: { append?: boolean }): typeof c; set(key: string, value: unknown): void; get(key: string): unknown; notFound(): globalThis.Response; res(): globalThis.Response }, next: () => Promise<void>) => globalThis.Response | Promise<globalThis.Response> | void | Promise<void>, extra?: typeof handler",
+        ts_return_type = "Server"
+    )]
     pub fn query(
         &self,
         env: Env,
@@ -395,7 +410,10 @@ impl Server {
         self.register(&env, "QUERY", first, second, third)
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "path: string, handler: (c: { req: { param(name: string): string | undefined; param(): Record<string, string>; query(name: string): string | undefined; query(): Record<string, string>; header(name: string): string | undefined; header(): Record<string, string>; method: string; url: string; path: string; raw: globalThis.Request; text(): Promise<string>; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; blob(): Promise<Blob>; formData(): Promise<FormData> }; env: Record<string, unknown>; executionCtx: unknown; finalized: boolean; text(body: string, status?: number): globalThis.Response; json(value: unknown, status?: number): globalThis.Response; html(body: string, status?: number): globalThis.Response; body(data: string, status?: number, headers?: Record<string, string>): globalThis.Response; redirect(url: string, status?: number): globalThis.Response; status(code: number): typeof c; header(name: string, value: string, options?: { append?: boolean }): typeof c; set(key: string, value: unknown): void; get(key: string): unknown; notFound(): globalThis.Response; res(): globalThis.Response }, next: () => Promise<void>) => globalThis.Response | Promise<globalThis.Response> | void | Promise<void>, extra?: typeof handler",
+        ts_return_type = "Server"
+    )]
     pub fn patch(
         &self,
         env: Env,
@@ -406,7 +424,10 @@ impl Server {
         self.register(&env, "PATCH", first, second, third)
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "path: string, handler: (c: { req: { param(name: string): string | undefined; param(): Record<string, string>; query(name: string): string | undefined; query(): Record<string, string>; header(name: string): string | undefined; header(): Record<string, string>; method: string; url: string; path: string; raw: globalThis.Request; text(): Promise<string>; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; blob(): Promise<Blob>; formData(): Promise<FormData> }; env: Record<string, unknown>; executionCtx: unknown; finalized: boolean; text(body: string, status?: number): globalThis.Response; json(value: unknown, status?: number): globalThis.Response; html(body: string, status?: number): globalThis.Response; body(data: string, status?: number, headers?: Record<string, string>): globalThis.Response; redirect(url: string, status?: number): globalThis.Response; status(code: number): typeof c; header(name: string, value: string, options?: { append?: boolean }): typeof c; set(key: string, value: unknown): void; get(key: string): unknown; notFound(): globalThis.Response; res(): globalThis.Response }, next: () => Promise<void>) => globalThis.Response | Promise<globalThis.Response> | void | Promise<void>, extra?: typeof handler",
+        ts_return_type = "Server"
+    )]
     pub fn options(
         &self,
         env: Env,
@@ -417,7 +438,10 @@ impl Server {
         self.register(&env, "OPTIONS", first, second, third)
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "path: string, handler: (c: { req: { param(name: string): string | undefined; param(): Record<string, string>; query(name: string): string | undefined; query(): Record<string, string>; header(name: string): string | undefined; header(): Record<string, string>; method: string; url: string; path: string; raw: globalThis.Request; text(): Promise<string>; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; blob(): Promise<Blob>; formData(): Promise<FormData> }; env: Record<string, unknown>; executionCtx: unknown; finalized: boolean; text(body: string, status?: number): globalThis.Response; json(value: unknown, status?: number): globalThis.Response; html(body: string, status?: number): globalThis.Response; body(data: string, status?: number, headers?: Record<string, string>): globalThis.Response; redirect(url: string, status?: number): globalThis.Response; status(code: number): typeof c; header(name: string, value: string, options?: { append?: boolean }): typeof c; set(key: string, value: unknown): void; get(key: string): unknown; notFound(): globalThis.Response; res(): globalThis.Response }, next: () => Promise<void>) => globalThis.Response | Promise<globalThis.Response> | void | Promise<void>, extra?: typeof handler",
+        ts_return_type = "Server"
+    )]
     pub fn head(
         &self,
         env: Env,
@@ -428,7 +452,10 @@ impl Server {
         self.register(&env, "HEAD", first, second, third)
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "path: string, handler: (c: { req: { param(name: string): string | undefined; param(): Record<string, string>; query(name: string): string | undefined; query(): Record<string, string>; header(name: string): string | undefined; header(): Record<string, string>; method: string; url: string; path: string; raw: globalThis.Request; text(): Promise<string>; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; blob(): Promise<Blob>; formData(): Promise<FormData> }; env: Record<string, unknown>; executionCtx: unknown; finalized: boolean; text(body: string, status?: number): globalThis.Response; json(value: unknown, status?: number): globalThis.Response; html(body: string, status?: number): globalThis.Response; body(data: string, status?: number, headers?: Record<string, string>): globalThis.Response; redirect(url: string, status?: number): globalThis.Response; status(code: number): typeof c; header(name: string, value: string, options?: { append?: boolean }): typeof c; set(key: string, value: unknown): void; get(key: string): unknown; notFound(): globalThis.Response; res(): globalThis.Response }, next: () => Promise<void>) => globalThis.Response | Promise<globalThis.Response> | void | Promise<void>, extra?: typeof handler",
+        ts_return_type = "Server"
+    )]
     pub fn all(
         &self,
         env: Env,
@@ -439,7 +466,10 @@ impl Server {
         self.register(&env, "ALL", first, second, third)
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "method: string | string[], path: string | string[], handler: (c: { req: { param(name: string): string | undefined; param(): Record<string, string>; query(name: string): string | undefined; query(): Record<string, string>; header(name: string): string | undefined; header(): Record<string, string>; method: string; url: string; path: string; raw: globalThis.Request; text(): Promise<string>; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; blob(): Promise<Blob>; formData(): Promise<FormData> }; env: Record<string, unknown>; executionCtx: unknown; finalized: boolean; text(body: string, status?: number): globalThis.Response; json(value: unknown, status?: number): globalThis.Response; html(body: string, status?: number): globalThis.Response; body(data: string, status?: number, headers?: Record<string, string>): globalThis.Response; redirect(url: string, status?: number): globalThis.Response; status(code: number): typeof c; header(name: string, value: string, options?: { append?: boolean }): typeof c; set(key: string, value: unknown): void; get(key: string): unknown; notFound(): globalThis.Response; res(): globalThis.Response }, next: () => Promise<void>) => globalThis.Response | Promise<globalThis.Response> | void | Promise<void>, extra?: typeof handler",
+        ts_return_type = "Server"
+    )]
     pub fn on(
         &self,
         env: Env,
@@ -467,7 +497,11 @@ impl Server {
         Ok(self.clone_view())
     }
 
-    #[napi(js_name = "use")]
+    #[napi(
+        js_name = "use",
+        ts_args_type = "...args: [path: string, middleware: (c: { req: { param(name: string): string | undefined; param(): Record<string, string>; query(name: string): string | undefined; query(): Record<string, string>; header(name: string): string | undefined; header(): Record<string, string>; method: string; url: string; path: string; raw: globalThis.Request; text(): Promise<string>; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; blob(): Promise<Blob>; formData(): Promise<FormData> }; env: Record<string, unknown>; executionCtx: unknown; finalized: boolean; text(body: string, status?: number): globalThis.Response; json(value: unknown, status?: number): globalThis.Response; html(body: string, status?: number): globalThis.Response; body(data: string, status?: number, headers?: Record<string, string>): globalThis.Response; redirect(url: string, status?: number): globalThis.Response; status(code: number): typeof c; header(name: string, value: string, options?: { append?: boolean }): typeof c; set(key: string, value: unknown): void; get(key: string): unknown; notFound(): globalThis.Response; res(): globalThis.Response }, next: () => Promise<void>) => globalThis.Response | Promise<globalThis.Response> | void | Promise<void>] | [middleware: (c: { req: { param(name: string): string | undefined; param(): Record<string, string>; query(name: string): string | undefined; query(): Record<string, string>; header(name: string): string | undefined; header(): Record<string, string>; method: string; url: string; path: string; raw: globalThis.Request; text(): Promise<string>; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; blob(): Promise<Blob>; formData(): Promise<FormData> }; env: Record<string, unknown>; executionCtx: unknown; finalized: boolean; text(body: string, status?: number): globalThis.Response; json(value: unknown, status?: number): globalThis.Response; html(body: string, status?: number): globalThis.Response; body(data: string, status?: number, headers?: Record<string, string>): globalThis.Response; redirect(url: string, status?: number): globalThis.Response; status(code: number): typeof c; header(name: string, value: string, options?: { append?: boolean }): typeof c; set(key: string, value: unknown): void; get(key: string): unknown; notFound(): globalThis.Response; res(): globalThis.Response }, next: () => Promise<void>) => globalThis.Response | Promise<globalThis.Response> | void | Promise<void>, extra?: (c: { req: { param(name: string): string | undefined; param(): Record<string, string>; query(name: string): string | undefined; query(): Record<string, string>; header(name: string): string | undefined; header(): Record<string, string>; method: string; url: string; path: string; raw: globalThis.Request; text(): Promise<string>; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; blob(): Promise<Blob>; formData(): Promise<FormData> }; env: Record<string, unknown>; executionCtx: unknown; finalized: boolean; text(body: string, status?: number): globalThis.Response; json(value: unknown, status?: number): globalThis.Response; html(body: string, status?: number): globalThis.Response; body(data: string, status?: number, headers?: Record<string, string>): globalThis.Response; redirect(url: string, status?: number): globalThis.Response; status(code: number): typeof c; header(name: string, value: string, options?: { append?: boolean }): typeof c; set(key: string, value: unknown): void; get(key: string): unknown; notFound(): globalThis.Response; res(): globalThis.Response }, next: () => Promise<void>) => globalThis.Response | Promise<globalThis.Response> | void | Promise<void>]",
+        ts_return_type = "Server"
+    )]
     pub fn use_(
         &self,
         env: Env,
@@ -541,13 +575,19 @@ impl Server {
         }
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "handler: (c: { req: { param(name: string): string | undefined; param(): Record<string, string>; query(name: string): string | undefined; query(): Record<string, string>; header(name: string): string | undefined; header(): Record<string, string>; method: string; url: string; path: string; raw: globalThis.Request; text(): Promise<string>; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; blob(): Promise<Blob>; formData(): Promise<FormData> }; env: Record<string, unknown>; executionCtx: unknown; finalized: boolean; text(body: string, status?: number): globalThis.Response; json(value: unknown, status?: number): globalThis.Response; html(body: string, status?: number): globalThis.Response; body(data: string, status?: number, headers?: Record<string, string>): globalThis.Response; redirect(url: string, status?: number): globalThis.Response; status(code: number): typeof c; header(name: string, value: string, options?: { append?: boolean }): typeof c; set(key: string, value: unknown): void; get(key: string): unknown; notFound(): globalThis.Response; res(): globalThis.Response }) => globalThis.Response | Promise<globalThis.Response>",
+        ts_return_type = "Server"
+    )]
     pub fn not_found(&self, env: Env, handler: Unknown) -> Result<Self> {
         *self.view.inner.not_found.lock().unwrap() = Some(make_handler(&env, handler)?);
         Ok(self.clone_view())
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "handler: (error: unknown, c: { req: { param(name: string): string | undefined; param(): Record<string, string>; query(name: string): string | undefined; query(): Record<string, string>; header(name: string): string | undefined; header(): Record<string, string>; method: string; url: string; path: string; raw: globalThis.Request; text(): Promise<string>; json(): Promise<unknown>; arrayBuffer(): Promise<ArrayBuffer>; blob(): Promise<Blob>; formData(): Promise<FormData> }; env: Record<string, unknown>; executionCtx: unknown; finalized: boolean; text(body: string, status?: number): globalThis.Response; json(value: unknown, status?: number): globalThis.Response; html(body: string, status?: number): globalThis.Response; body(data: string, status?: number, headers?: Record<string, string>): globalThis.Response; redirect(url: string, status?: number): globalThis.Response; status(code: number): typeof c; header(name: string, value: string, options?: { append?: boolean }): typeof c; set(key: string, value: unknown): void; get(key: string): unknown; notFound(): globalThis.Response; res(): globalThis.Response }) => globalThis.Response | Promise<globalThis.Response>",
+        ts_return_type = "Server"
+    )]
     pub fn on_error(&self, env: Env, handler: Unknown) -> Result<Self> {
         *self.view.inner.on_error.lock().unwrap() = Some(make_handler(&env, handler)?);
         Ok(self.clone_view())
@@ -601,7 +641,10 @@ impl Server {
         Ok(())
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "request: globalThis.Request, bindings?: unknown, execution?: unknown",
+        ts_return_type = "Promise<globalThis.Response>"
+    )]
     pub fn fetch(
         &self,
         env: Env,
@@ -659,7 +702,10 @@ impl Server {
         dispatch_prepared(&env, self, prepared, Some(env_value), execution)
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "input: string | globalThis.Request, init?: globalThis.RequestInit, bindings?: unknown, execution?: unknown",
+        ts_return_type = "Promise<globalThis.Response>"
+    )]
     pub fn request(
         &self,
         env: Env,

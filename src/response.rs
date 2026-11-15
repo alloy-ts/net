@@ -23,7 +23,7 @@
 //! | `formData()` | ✅ urlencoded + multipart |
 //! | `clone()` | ✅ throws `TypeError` once the body is consumed |
 //! | `Response.error()` / `Response.json()` / `Response.redirect()` | ✅ static factories |
-//! | `constructor(body?, init?)` | ✅ validates status `200..=599` and null-body statuses `101/103/204/205/304` |
+//! | `constructor(body?, init?)` | ✅ validates status `200..=599` and null-body statuses `204/205/304` (see the note on `101`/`103` below) |
 //!
 //! ## Known limitations (native binding level)
 //!
@@ -35,6 +35,10 @@
 //! * `body` yields a fresh `ReadableStream` per access (so `response.body ===
 //!   response.body` is `false`); the shared `bodyUsed` flag still reflects
 //!   consumption across every accessor, so `clone()` throws after any read.
+//! * The Fetch spec lists `101` and `103` among the null-body statuses, but a
+//!   `Response` constructor only accepts `200..=599`. Those two codes are
+//!   therefore unreachable here: the range check rejects them before the
+//!   null-body check, and only `204`/`205`/`304` can reach it.
 
 use napi::Status;
 use napi::bindgen_prelude::*;
@@ -76,7 +80,9 @@ impl Response {
     /// Construct a new `Response`.
     ///
     /// Accepts an optional body (string or Buffer) and optional `ResponseInit`.
-    /// Validates status range (200..=599) and null-body statuses (101, 103, 204, 205, 304).
+    /// Validates status range (200..=599) and rejects a body for the reachable
+    /// null-body statuses (204, 205, 304). The spec's 101/103 are below the
+    /// accepted range and cannot be constructed here.
     #[napi(constructor)]
     pub fn new(
         body: Option<Either<String, Buffer>>,
@@ -92,6 +98,8 @@ impl Response {
             ));
         }
 
+        // Full Fetch-spec null-body set. The 200..=599 check above makes 101/103
+        // unreachable here; only 204/205/304 can satisfy this predicate.
         let is_null_body_status = matches!(status, 101 | 103 | 204 | 205 | 304);
         if is_null_body_status && body.is_some() {
             return Err(napi::Error::new(
