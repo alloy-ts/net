@@ -5,6 +5,8 @@ pub mod request;
 pub mod response;
 pub mod router;
 pub mod server;
+#[cfg(feature = "mcp")]
+pub mod server_mcp;
 pub mod socket;
 
 pub use fetch::*;

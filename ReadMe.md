@@ -1,6 +1,10 @@
-# Starter Template
+# @alloy-ts/net
 
-Starter Template for Rust + TypeScript via NAPI-RS, Node-API (N-API) bindings.
+See [Local and portable servers](docs/server.md) for the Axum listener, MCP
+feature, and local/cloud examples.
+
+Rust and TypeScript networking APIs through N-API, with a portable Fetch
+application entry point for cloud functions.
 
 ## Getting Started
 
@@ -9,10 +13,11 @@ Starter Template for Rust + TypeScript via NAPI-RS, Node-API (N-API) bindings.
 3. Run the application
 
 ```bash
-git clone https://repo.chen.software/alloy-ts/net
-cd starter-template
+git clone https://github.com/alloy-ts/net.git
+cd net
 npm install
-npm run start
+npm run build
+npm test
 ```
 
 ## Running the application

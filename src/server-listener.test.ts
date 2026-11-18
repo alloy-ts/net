@@ -43,7 +43,7 @@ async function exchangeHeaders(port: number, payload: string | Buffer): Promise<
   return text(chunks);
 }
 
-describe("Rocket listener", () => {
+describe("Axum listener", () => {
   test("decodes a chunked POST and keeps duplicate headers", async () => {
     const server = new Server({ port: 0 });
     server.post("/chunk", async (c) => c.text(await c.req.text()));
@@ -78,7 +78,7 @@ describe("Rocket listener", () => {
         port,
         "POST /big HTTP/1.1\r\nHost: localhost\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n0\r\n\r\n",
       );
-      // Hyper, under Rocket, accepts this pair and uses the chunked body.
+      // Hyper accepts this pair and uses the chunked body.
       expect(statusOf(both)).toBe(200);
       expect(both).toContain("content-length: 0");
 
@@ -140,7 +140,7 @@ describe("Rocket listener", () => {
     }
   });
 
-  test("the listener rejects QUERY and PURGE while request() still routes them", async () => {
+  test("the listener routes QUERY and PURGE like request()", async () => {
     const server = new Server({ port: 0 });
     server.query("/search", (c) => c.text("QUERY"));
     server.on("PURGE", "/cache", (c) => c.text("PURGE"));
@@ -156,8 +156,10 @@ describe("Rocket listener", () => {
         port,
         "PURGE /cache HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
       );
-      expect(statusOf(query)).toBe(400);
-      expect(statusOf(purge)).toBe(400);
+      expect(statusOf(query)).toBe(200);
+      expect(query).toContain("QUERY");
+      expect(statusOf(purge)).toBe(200);
+      expect(purge).toContain("PURGE");
     } finally {
       await server.stop();
     }
