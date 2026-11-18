@@ -47,7 +47,7 @@ describe("Server platform surface", () => {
     }
   });
 
-  test("request() routes custom methods and the listener answers them with 400", async () => {
+  test("request() and the listener route custom methods", async () => {
     const server = new Server({ port: 0 });
     server.query("/search", (c) => c.text("QUERY"));
     server.on("PURGE", "/cache", (c) => c.text("PURGE"));
@@ -67,9 +67,9 @@ describe("Server platform surface", () => {
     const port = await server.start();
     try {
       const base = `http://127.0.0.1:${port}`;
-      expect((await fetch(`${base}/search`, { method: "QUERY" })).status).toBe(400);
-      expect((await fetch(`${base}/cache`, { method: "PURGE" })).status).toBe(400);
-      expect((await fetch(`${base}/custom?q=1`, { method: "FOO" })).status).toBe(400);
+      expect(await (await fetch(`${base}/search`, { method: "QUERY" })).text()).toBe("QUERY");
+      expect(await (await fetch(`${base}/cache`, { method: "PURGE" })).text()).toBe("PURGE");
+      expect(await (await fetch(`${base}/custom?q=1`, { method: "FOO" })).text()).toBe("FOO 1");
       const head = await fetch(`${base}/both`, { method: "HEAD" });
       expect(head.headers.get("x-who")).toBe("head");
       expect(head.headers.get("content-length")).toBe(String(Buffer.byteLength("head-body")));

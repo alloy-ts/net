@@ -19,11 +19,14 @@
     "dist/index.js",
     "dist/index.d.ts",
     "dist/index.mjs",
-    "dist/index.d.mts"
+    "dist/index.d.mts",
+    "dist/cloud.mjs",
+    "dist/cloud.d.mts"
   ],
   "type": "module",
   "exports": {
     ".": "./dist/index.mjs",
+    "./cloud": "./dist/cloud.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {

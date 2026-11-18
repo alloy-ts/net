@@ -7,8 +7,7 @@
  * In-process checks, no listener:
  *   EXAMPLE_SMOKE=1 node --import @oxc-node/core/register examples/server.ts
  *
- * `start()` uses Rocket. Rocket 0.5 cannot route QUERY or PURGE, so those
- * methods are exercised here with `request()` only.
+ * `start()` uses Axum and accepts custom methods such as QUERY and PURGE.
  */
 import assert from "node:assert/strict";
 import { pathToFileURL } from "node:url";
@@ -66,7 +65,7 @@ export function createApp(port = Number(process.env.PORT ?? 3000)) {
     throw new Error("boom");
   });
 
-  // In-process only. The Rocket listener answers QUERY with 400.
+  // Custom methods work both in process and over HTTP.
   app.query("/search", (c) => c.text("found"));
 
   return app;

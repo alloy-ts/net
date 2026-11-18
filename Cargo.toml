@@ -19,7 +19,6 @@ base64 = "0.22"
 rustls-native-certs = "0.8"
 url = "2.5"
 http-request = { path = "vendor/http-request" }
-rocket = "0.5.2"
 tokio = { version = "1", features = [
   "macros",
   "rt",
@@ -30,6 +29,14 @@ tokio = { version = "1", features = [
   "fs",
   "net",
 ] }
+axum = "0.8"
+tower-mcp = { version = "0.24", features = ["http", "websocket"], optional = true }
 
 [build-dependencies]
 napi-build = "2.6.0"
+
+[features]
+mcp = ["dep:tower-mcp"]
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

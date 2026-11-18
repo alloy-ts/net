@@ -1,18 +1,23 @@
-//! Hono-style server. Routing and dispatch live here; Rocket is the listener.
+//! Hono-style server. Routing and dispatch live here; Axum is the listener.
 //!
 //! JavaScript handlers are stored as [`FunctionRef`]s and invoked through a
 //! [`ThreadsafeFunction`]. `next()` schedules the rest of the chain on the
 //! Tokio runtime and returns a Promise, so the JavaScript thread is never
 //! blocked waiting for itself.
 //!
-//! Rocket 0.5.2 cannot represent QUERY, PURGE, or other methods outside its
-//! enum. Those routes still run for `fetch()` and `request()`. A live listener
-//! answers them with 400 before dispatch.
+//! Axum accepts custom HTTP methods such as QUERY and PURGE at the listener.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU16, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    extract::State as AxumState,
+    http::{HeaderName, HeaderValue, Request as HttpRequest, Response as HttpResponse, StatusCode},
+    routing::any,
+};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::ThreadsafeFunction;
@@ -147,7 +152,7 @@ struct Inner {
     on_error: StdMutex<Option<Arc<JsHandler>>>,
     get_path: StdMutex<Option<UserFn>>,
     legacy_remote: StdMutex<Option<Arc<RemoteFn>>>,
-    rocket: Mutex<Option<Running>>,
+    running: Mutex<Option<Running>>,
     timer: StdMutex<Option<JsRef>>,
 }
 
@@ -157,7 +162,7 @@ struct LegacyTable {
 }
 
 struct Running {
-    shutdown: rocket::Shutdown,
+    shutdown: oneshot::Sender<()>,
     task: tokio::task::JoinHandle<()>,
 }
 
@@ -311,7 +316,7 @@ impl Server {
                     on_error: StdMutex::new(None),
                     get_path: StdMutex::new(get_path),
                     legacy_remote: StdMutex::new(legacy_remote(&env, legacy_routes, legacy_fetch)?),
-                    rocket: Mutex::new(None),
+                    running: Mutex::new(None),
                     timer: StdMutex::new(None),
                 }),
                 base_path: "/".to_owned(),
@@ -739,7 +744,7 @@ impl Server {
         if self
             .view
             .inner
-            .rocket
+            .running
             .try_lock()
             .ok()
             .and_then(|guard| guard.as_ref().map(|_| ()))
@@ -750,7 +755,7 @@ impl Server {
         }
         install_timer(env, &self.view.inner)?;
         let inner = self.view.inner.clone();
-        env.spawn_future(async move { rocket_start(inner).await })
+        env.spawn_future(async move { axum_start(inner, Router::new()).await })
     }
 
     #[napi]
@@ -763,13 +768,23 @@ impl Server {
         clear_timer(env, &self.view.inner);
         let inner = self.view.inner.clone();
         env.spawn_future(async move {
-            rocket_stop(inner).await?;
+            axum_stop(inner).await?;
             Ok(())
         })
     }
 }
 
 impl Server {
+    /// Router for the local application. Other Axum routers can be merged into it.
+    pub fn into_router(&self) -> Router {
+        axum_router(self.view.inner.clone())
+    }
+
+    /// Start the local listener with additional Axum routes.
+    pub async fn start_with_router(&self, extra: Router) -> Result<u16> {
+        axum_start(self.view.inner.clone(), extra).await
+    }
+
     fn clone_view(&self) -> Self {
         Self {
             view: View {
@@ -2439,13 +2454,15 @@ fn ensure_fetch_host(env: &Env) -> Result<()> {
     Ok(())
 }
 
-async fn rocket_start(inner: Arc<Inner>) -> Result<u16> {
-    use rocket::data::ToByteUnit;
-    use rocket::http::Method;
-
-    use rocket::Route;
-
-    let mut running = inner.rocket.lock().await;
+async fn axum_start(inner: Arc<Inner>, extra: Router) -> Result<u16> {
+    let mut running = inner.running.lock().await;
+    if running
+        .as_ref()
+        .is_some_and(|server| server.task.is_finished())
+        && let Some(server) = running.take()
+    {
+        let _ = server.task.await;
+    }
     if running.is_some() {
         return Err(Error::from_reason("server already started"));
     }
@@ -2453,168 +2470,156 @@ async fn rocket_start(inner: Arc<Inner>) -> Result<u16> {
         .host
         .parse::<std::net::IpAddr>()
         .map_err(|error| Error::from_reason(error.to_string()))?;
-    let mut config = rocket::Config::debug_default();
-    config.address = address;
-    config.port = inner.configured_port;
-    config.log_level = rocket::config::LogLevel::Off;
-    config.shutdown.ctrlc = false;
-    config.shutdown.grace = 0;
-    config.shutdown.mercy = 0;
-    config.limits = rocket::data::Limits::default()
-        .limit("bytes", (MAX_BODY_BYTES as usize).bytes())
-        .limit("string", (MAX_BODY_BYTES as usize).bytes())
-        .limit("data-form", (MAX_BODY_BYTES as usize).bytes())
-        .limit("file", (MAX_BODY_BYTES as usize).bytes())
-        .limit("json", (MAX_BODY_BYTES as usize).bytes())
-        .limit("form", (MAX_BODY_BYTES as usize).bytes());
-    let (ready_tx, ready_rx) = oneshot::channel();
-    let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
-    let port = Arc::new(AtomicU16::new(0));
-    let port_store = port.clone();
-    let listening = Arc::new(AtomicBool::new(false));
-    let listening_store = listening.clone();
-    let dispatch = RocketDispatch(inner.clone());
-    let routes = [
-        Method::Get,
-        Method::Head,
-        Method::Post,
-        Method::Put,
-        Method::Delete,
-        Method::Patch,
-        Method::Options,
-        Method::Trace,
-        Method::Connect,
-    ]
-    .into_iter()
-    .flat_map(|method| {
-        let handler = dispatch.clone();
-        [
-            Route::new(method, "/", handler.clone()),
-            Route::new(method, "/<path..>", handler),
-        ]
-    })
-    .collect::<Vec<_>>();
-    let rocket = rocket::custom(config)
-        .mount("/", routes)
-        .attach(rocket::fairing::AdHoc::on_liftoff("ready", move |rocket| {
-            let tx = ready_tx.clone();
-            let port = port_store.clone();
-            let listening = listening_store.clone();
-            Box::pin(async move {
-                port.store(rocket.config().port, Ordering::SeqCst);
-                listening.store(true, Ordering::SeqCst);
-                if let Some(tx) = tx.lock().await.take() {
-                    let _ = tx.send(rocket.config().port);
-                }
-            })
-        }))
-        .ignite()
+    let listener = tokio::net::TcpListener::bind((address, inner.configured_port))
         .await
         .map_err(|error| Error::from_reason(error.to_string()))?;
-    let shutdown = rocket.shutdown();
-    let flag = listening.clone();
-    let task = tokio::spawn(async move {
-        if let Err(error) = rocket.launch().await {
-            eprintln!("Rocket server: {error}");
-        }
-        flag.store(false, Ordering::SeqCst);
-    });
-    let bound = ready_rx
-        .await
-        .map_err(|_| Error::from_reason("Rocket failed to bind"))?;
+    let bound = listener
+        .local_addr()
+        .map_err(|error| Error::from_reason(error.to_string()))?
+        .port();
     inner.bound_port.store(bound, Ordering::SeqCst);
+    let app = axum_router(inner.clone()).merge(extra);
+    let (shutdown, done) = oneshot::channel();
+    let active = inner.clone();
     inner.listening.store(true, Ordering::SeqCst);
+    let task = tokio::spawn(async move {
+        if let Err(error) = axum::serve(listener, app)
+            .with_graceful_shutdown(async {
+                let _ = done.await;
+            })
+            .await
+        {
+            eprintln!("Axum server: {error}");
+        }
+        active.listening.store(false, Ordering::SeqCst);
+    });
     *running = Some(Running { shutdown, task });
     Ok(bound)
 }
 
-#[derive(Clone)]
-struct RocketDispatch(Arc<Inner>);
-
-#[rocket::async_trait]
-impl rocket::route::Handler for RocketDispatch {
-    async fn handle<'r>(
-        &self,
-        request: &'r rocket::Request<'_>,
-        data: rocket::Data<'r>,
-    ) -> rocket::route::Outcome<'r> {
-        use rocket::data::ToByteUnit;
-        use rocket::http::{Header, Status};
-        use std::io::Cursor;
-        for value in request.headers().get("Content-Length") {
-            match value.parse::<u64>() {
-                Ok(len) if len > MAX_BODY_BYTES => {
-                    return rocket::route::Outcome::Error(Status::PayloadTooLarge);
-                }
-                Ok(_) => {}
-                Err(_) => return rocket::route::Outcome::Error(Status::BadRequest),
-            }
-        }
-        let bytes = match data
-            .open((MAX_BODY_BYTES as usize).bytes())
-            .into_bytes()
-            .await
-        {
-            Ok(bytes) if bytes.is_complete() => bytes.into_inner(),
-            _ => return rocket::route::Outcome::Error(Status::PayloadTooLarge),
-        };
-        let headers = request
-            .headers()
-            .iter()
-            .map(|header| (header.name().to_string(), header.value().to_string()))
-            .collect::<Vec<_>>();
-        let prepared = Prepared {
-            method: request.method().as_str().to_owned(),
-            url: format!(
-                "http://{}:{}{}",
-                self.0.host,
-                self.0.bound_port.load(Ordering::SeqCst),
-                request.uri()
-            ),
-            path: request.uri().path().to_string(),
-            headers,
-            body: bytes,
-        };
-        let wire = match dispatch_inner(self.0.clone(), prepared, Value::Null, None).await {
-            Ok(wire) => wire,
-            Err(_) => return rocket::route::Outcome::Error(Status::InternalServerError),
-        };
-        let mut response = rocket::Response::build();
-        response.status(Status::new(wire.status));
-        let mut declared = None;
-        for (key, value) in &wire.headers {
-            if key.eq_ignore_ascii_case("content-length") {
-                declared = value.parse().ok();
-                continue;
-            }
-            if key.eq_ignore_ascii_case("transfer-encoding")
-                || key.eq_ignore_ascii_case("connection")
-            {
-                continue;
-            }
-            response.header_adjoin(Header::new(key.clone(), value.clone()));
-        }
-        if request.method() == rocket::http::Method::Head {
-            response.sized_body(
-                declared.or(Some(wire.body.len())),
-                Cursor::new(Vec::<u8>::new()),
-            );
-        } else {
-            response.sized_body(wire.body.len(), Cursor::new(wire.body));
-        }
-        rocket::route::Outcome::Success(response.finalize())
-    }
+fn axum_router(inner: Arc<Inner>) -> Router {
+    Router::new().fallback(any(axum_dispatch)).with_state(inner)
 }
 
-async fn rocket_stop(inner: Arc<Inner>) -> Result<()> {
-    inner.listening.store(false, Ordering::SeqCst);
-    if let Some(running) = inner.rocket.lock().await.take() {
-        running.shutdown.notify();
-        running
-            .task
-            .await
-            .map_err(|error| Error::from_reason(error.to_string()))?;
+fn axum_error(status: StatusCode) -> HttpResponse<Body> {
+    HttpResponse::builder()
+        .status(status)
+        .body(Body::empty())
+        .expect("valid error response")
+}
+
+async fn axum_dispatch(
+    AxumState(inner): AxumState<Arc<Inner>>,
+    request: HttpRequest<Body>,
+) -> HttpResponse<Body> {
+    let (parts, body) = request.into_parts();
+    for value in parts
+        .headers
+        .get_all(axum::http::header::CONTENT_LENGTH)
+        .iter()
+    {
+        match value
+            .to_str()
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+        {
+            Some(length) if length > MAX_BODY_BYTES => {
+                return axum_error(StatusCode::PAYLOAD_TOO_LARGE);
+            }
+            Some(_) => {}
+            None => return axum_error(StatusCode::BAD_REQUEST),
+        }
     }
+    let bytes = match to_bytes(body, MAX_BODY_BYTES as usize).await {
+        Ok(bytes) => bytes,
+        Err(_) => return axum_error(StatusCode::PAYLOAD_TOO_LARGE),
+    };
+    let headers = parts
+        .headers
+        .iter()
+        .map(|(name, value)| {
+            (
+                name.as_str().to_owned(),
+                value.to_str().unwrap_or("").to_owned(),
+            )
+        })
+        .collect();
+    let host = if inner.host.contains(':') {
+        format!("[{}]", inner.host)
+    } else {
+        inner.host.clone()
+    };
+    let path_and_query = parts
+        .uri
+        .path_and_query()
+        .map(|value| value.as_str())
+        .unwrap_or("/");
+    let prepared = Prepared {
+        method: parts.method.as_str().to_owned(),
+        url: format!(
+            "http://{host}:{}{path_and_query}",
+            inner.bound_port.load(Ordering::SeqCst)
+        ),
+        path: parts.uri.path().to_owned(),
+        headers,
+        body: bytes.to_vec(),
+    };
+    let wire = match dispatch_inner(inner, prepared, Value::Null, None).await {
+        Ok(wire) => wire,
+        Err(_) => return axum_error(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+    let status = StatusCode::from_u16(wire.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let mut response = HttpResponse::builder().status(status);
+    let mut declared_length = None;
+    for (name, value) in &wire.headers {
+        if name.eq_ignore_ascii_case("content-length") {
+            declared_length = value.parse::<usize>().ok();
+            continue;
+        }
+        if matches!(
+            name.to_ascii_lowercase().as_str(),
+            "transfer-encoding" | "connection"
+        ) {
+            continue;
+        }
+        let (Ok(name), Ok(value)) = (
+            HeaderName::try_from(name.as_str()),
+            HeaderValue::try_from(value.as_str()),
+        ) else {
+            return axum_error(StatusCode::INTERNAL_SERVER_ERROR);
+        };
+        response = response.header(name, value);
+    }
+    if wire.head && status != StatusCode::NO_CONTENT && status != StatusCode::NOT_MODIFIED {
+        response = response.header(
+            axum::http::header::CONTENT_LENGTH,
+            declared_length.unwrap_or(wire.body.len()).to_string(),
+        );
+    }
+    let body =
+        if wire.head || status == StatusCode::NO_CONTENT || status == StatusCode::NOT_MODIFIED {
+            Body::empty()
+        } else {
+            Body::from(wire.body)
+        };
+    response
+        .body(body)
+        .unwrap_or_else(|_| axum_error(StatusCode::INTERNAL_SERVER_ERROR))
+}
+
+async fn axum_stop(inner: Arc<Inner>) -> Result<()> {
+    let mut running = inner.running.lock().await;
+    if let Some(mut server) = running.take() {
+        let _ = server.shutdown.send(());
+        if tokio::time::timeout(std::time::Duration::from_secs(2), &mut server.task)
+            .await
+            .is_err()
+        {
+            server.task.abort();
+            let _ = server.task.await;
+        }
+    }
+    inner.listening.store(false, Ordering::SeqCst);
     Ok(())
 }
 
